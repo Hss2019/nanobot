@@ -31,6 +31,16 @@ if TEMPLATES.exists():
 if SKILLS.exists():
     cmd += ["--add-data", f"{SKILLS};nanobot/skills"]
 
+try:
+    import litellm
+
+    litellm_dir = Path(litellm.__file__).resolve().parent
+    backup_map = litellm_dir / "model_prices_and_context_window_backup.json"
+    if backup_map.exists():
+        cmd += ["--add-data", f"{backup_map};litellm"]
+except Exception:
+    pass
+
 cmd += [
     # Hidden imports that PyInstaller may miss
     "--hidden-import", "nanobot.cli.commands",
@@ -53,6 +63,7 @@ cmd += [
     "--hidden-import", "pystray",
     "--hidden-import", "tiktoken_ext.openai_public",
     "--hidden-import", "tiktoken_ext",
+    "--collect-data", "litellm",
     # Console mode (shows logs; use --windowed for no console)
     "--console",
     str(ENTRY),
