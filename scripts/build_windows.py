@@ -83,12 +83,27 @@ try:
     import litellm
 
     litellm_dir = Path(litellm.__file__).resolve().parent
-    backup_map = litellm_dir / "model_prices_and_context_window_backup.json"
     tokenizers_dir = litellm_dir / "litellm_core_utils" / "tokenizers"
-    if backup_map.exists():
-        cmd += ["--add-data", f"{backup_map};litellm"]
+    containers_dir = litellm_dir / "containers"
+    runtime_files = [
+        litellm_dir / "anthropic_beta_headers_config.json",
+        litellm_dir / "blog_posts.json",
+        litellm_dir / "cost.json",
+        litellm_dir / "model_prices_and_context_window_backup.json",
+        litellm_dir / "policy_templates_backup.json",
+        litellm_dir / "provider_endpoints_support_backup.json",
+        litellm_dir / "llms" / "openai_like" / "providers.json",
+        litellm_dir / "containers" / "endpoints.json",
+    ]
+    for data_file in runtime_files:
+        if data_file.exists():
+            rel_parent = data_file.parent.relative_to(litellm_dir).as_posix()
+            dest = f"litellm/{rel_parent}" if rel_parent != "." else "litellm"
+            cmd += ["--add-data", f"{data_file};{dest}"]
     if tokenizers_dir.exists():
         cmd += ["--add-data", f"{tokenizers_dir};litellm/litellm_core_utils/tokenizers"]
+    if containers_dir.exists():
+        cmd += ["--add-data", f"{containers_dir};litellm/containers"]
 except Exception:
     pass
 
@@ -117,8 +132,8 @@ cmd += [
     "--hidden-import", "litellm.litellm_core_utils",
     "--hidden-import", "litellm.litellm_core_utils.tokenizers",
     "--collect-submodules", "litellm.litellm_core_utils",
-    # Console mode (shows logs; use --windowed for no console)
-    "--console",
+    # Desktop app should launch without an attached console window.
+    "--windowed",
     str(ENTRY),
 ]
 
