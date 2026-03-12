@@ -143,6 +143,30 @@ def test_config_auto_detects_ollama_from_local_api_base():
     assert config.get_api_base() == "http://localhost:11434"
 
 
+def test_config_keeps_qwen_models_on_dashscope_instead_of_falling_back_to_openai():
+    config = Config.model_validate(
+        {
+            "agents": {"defaults": {"provider": "auto", "model": "qwen-plus"}},
+            "providers": {"openai": {"apiKey": "sk-openai"}},
+        }
+    )
+
+    assert config.get_provider_name() == "dashscope"
+    assert config.get_api_key() is None
+
+
+def test_config_allows_gateway_fallback_for_qwen_models_when_openrouter_is_configured():
+    config = Config.model_validate(
+        {
+            "agents": {"defaults": {"provider": "auto", "model": "qwen-plus"}},
+            "providers": {"openrouter": {"apiKey": "sk-or-test"}},
+        }
+    )
+
+    assert config.get_provider_name() == "openrouter"
+    assert config.get_api_key() == "sk-or-test"
+
+
 def test_find_by_model_prefers_explicit_prefix_over_generic_codex_keyword():
     spec = find_by_model("github-copilot/gpt-5.3-codex")
 

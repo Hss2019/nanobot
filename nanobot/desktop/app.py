@@ -8,6 +8,7 @@ import signal
 import sys
 import threading
 import time
+from pathlib import Path
 
 from loguru import logger
 
@@ -111,6 +112,10 @@ def start_desktop(
             from PIL import Image, ImageDraw
 
             def _create_icon() -> Image.Image:
+                logo_path = Path(__file__).resolve().parent.parent / "webui" / "static" / "cmclaw.png"
+                if logo_path.exists():
+                    return Image.open(logo_path).convert("RGBA").resize((64, 64), Image.LANCZOS)
+
                 img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
                 draw.ellipse([4, 4, 60, 60], fill=(60, 135, 251, 255))

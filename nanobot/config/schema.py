@@ -397,13 +397,30 @@ class Config(BaseSettings):
             if p and model_prefix and normalized_prefix == spec.name:
                 if spec.is_oauth or spec.is_local or p.api_key:
                     return p, spec.name
+                return p, spec.name
 
         # Match by keyword (order follows PROVIDERS registry)
+        matched_spec = None
         for spec in PROVIDERS:
             p = getattr(self.providers, spec.name, None)
             if p and any(_kw_matches(kw) for kw in spec.keywords):
+                matched_spec = spec
                 if spec.is_oauth or spec.is_local or p.api_key:
                     return p, spec.name
+
+        # If the model clearly matches a standard provider but that provider
+        # has no direct API key, only let gateways take over. Falling back to
+        # another unrelated standard provider makes model/provider mismatches
+        # opaque in the UI and surfaces confusing 400s like "model not supported".
+        if matched_spec is not None:
+            for spec in PROVIDERS:
+                if not spec.is_gateway:
+                    continue
+                p = getattr(self.providers, spec.name, None)
+                if p and p.api_key:
+                    return p, spec.name
+            p = getattr(self.providers, matched_spec.name, None)
+            return p, matched_spec.name
 
         # Fallback: configured local providers can route models without
         # provider-specific keywords (for example plain "llama3.2" on Ollama).

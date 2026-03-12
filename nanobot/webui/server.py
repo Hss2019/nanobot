@@ -134,6 +134,8 @@ def create_app(
             await ws.send_text(json.dumps({
                 "type": "connected", "chat_id": chat_id,
                 "model": config.agents.defaults.model,
+                "provider": config.get_provider_name() or config.agents.defaults.provider,
+                "configured_provider": config.agents.defaults.provider,
                 "has_key": bool(config.get_api_key()),
                 "history": history_msgs,
             }, ensure_ascii=False))
@@ -196,7 +198,8 @@ def create_app(
                 pass
         return JSONResponse({
             "model": config.agents.defaults.model,
-            "provider": config.agents.defaults.provider,
+            "provider": config.get_provider_name() or config.agents.defaults.provider,
+            "configured_provider": config.agents.defaults.provider,
             "has_key": bool(config.get_api_key()),
             "web_clients": web_channel.connected_clients,
             "sessions": len(session_manager.list_sessions()),

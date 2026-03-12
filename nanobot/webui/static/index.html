@@ -335,6 +335,13 @@ function toggleTheme(){const l=document.documentElement.getAttribute('data-theme
 // ── WebSocket ──
 let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false;
 function showMessages(){if(!hasMessages){hasMessages=true;document.getElementById('welcomeBox').style.display='none';document.getElementById('messages').style.display='flex'}}
+function formatProviderLabel(provider, configuredProvider){
+  if(!provider)return '--';
+  return configuredProvider&&configuredProvider!=='auto' ? provider : `${provider} (auto)`;
+}
+function formatFooterModel(model, provider){
+  return provider ? `${model||'--'} · ${provider}` : (model||'--');
+}
 function connect(){
   const p=location.protocol==='https:'?'wss:':'ws:';
   ws=new WebSocket(`${p}//${location.host}/ws`);
@@ -347,7 +354,7 @@ function handle(d){
   const box=document.getElementById('messages');
   if(d.type==='connected'){
     chatId=d.chat_id;
-    document.getElementById('footerModel').textContent=d.model||'--';
+    document.getElementById('footerModel').textContent=formatFooterModel(d.model,d.provider);
     document.getElementById('noKeyBar').style.display=d.has_key?'none':'';
     // Restore chat history
     if(d.history&&d.history.length>0){
@@ -386,7 +393,7 @@ async function loadOverview(){
       <div class="stat"><div class="num">${d.cron?.jobs??0}</div><div class="lbl">定时任务</div></div>`;
     document.getElementById('overviewKV').innerHTML=`
       <div class="kv"><span class="k">模型</span><span class="v">${d.model}</span></div>
-      <div class="kv"><span class="k">Provider</span><span class="v">${d.provider}</span></div>
+      <div class="kv"><span class="k">Provider</span><span class="v">${formatProviderLabel(d.provider,d.configured_provider)}</span></div>
       <div class="kv"><span class="k">工作区</span><span class="v" style="font-size:12px;font-family:monospace">${d.workspace}</span></div>`;
   }catch(e){document.getElementById('overviewStats').innerHTML='<div class="empty">加载失败</div>'}
 }

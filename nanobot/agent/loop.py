@@ -162,6 +162,19 @@ class AgentLoop:
             return None
         return re.sub(r"<think>[\s\S]*?</think>", "", text).strip() or None
 
+    def _humanize_provider_error(self, text: str | None) -> str | None:
+        """Add actionable guidance for common model/provider mismatch errors."""
+        if not text:
+            return None
+        lower = text.lower()
+        if "model" in lower and "not supported" in lower:
+            return (
+                f"当前模型 `{self.model}` 在当前 Provider 配置下不可用。\n"
+                "请到设置面板检查 Provider 和模型是否匹配，保存后重启 CMClaw。\n\n"
+                f"原始错误：{text}"
+            )
+        return text
+
     @staticmethod
     def _tool_hint(tool_calls: list) -> str:
         """Format tool calls as concise hint, e.g. 'web_search("query")'."""
@@ -226,7 +239,7 @@ class AgentLoop:
                 # poison the context and cause permanent 400 loops (#1303).
                 if response.finish_reason == "error":
                     logger.error("LLM returned error: {}", (clean or "")[:200])
-                    final_content = clean or "Sorry, I encountered an error calling the AI model."
+                    final_content = self._humanize_provider_error(clean) or "Sorry, I encountered an error calling the AI model."
                     break
                 messages = self.context.add_assistant_message(
                     messages, clean, reasoning_content=response.reasoning_content,
