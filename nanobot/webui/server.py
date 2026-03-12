@@ -38,6 +38,22 @@ def create_app(
     if exec_tool and hasattr(exec_tool, "set_approval_channel"):
         exec_tool.set_approval_channel(web_channel)
 
+    def _apply_updated_config(updated: "Config") -> None:
+        config.agents = updated.agents
+        config.channels = updated.channels
+        config.providers = updated.providers
+        config.gateway = updated.gateway
+        config.tools = updated.tools
+        web_channel.config = updated.channels.web
+
+        from nanobot.cli.commands import _make_provider_safe
+
+        provider = _make_provider_safe(updated)
+        agent.apply_runtime_config(updated, provider)
+        if exec_tool := agent.tools.get("exec"):
+            if hasattr(exec_tool, "set_approval_channel"):
+                exec_tool.set_approval_channel(web_channel)
+
     def _runtime_status() -> dict[str, Any]:
         cron_svc = getattr(agent, "_cron_service", None) or getattr(agent, "cron_service", None)
         cron_info = {}
@@ -202,30 +218,38 @@ def create_app(
     @app.post("/api/config")
     async def save_config_api(payload: dict[str, Any]):
         from nanobot.config.loader import load_config, save_config
-        from nanobot.cli.commands import _make_provider_safe
         cfg = load_config()
         current = cfg.model_dump(by_alias=True)
         _deep_merge(current, payload)
         from nanobot.config.schema import Config as CfgClass
         updated = CfgClass(**current)
         save_config(updated)
-
-        config.agents = updated.agents
-        config.channels = updated.channels
-        config.providers = updated.providers
-        config.gateway = updated.gateway
-        config.tools = updated.tools
-        web_channel.config = updated.channels.web
-
-        provider = _make_provider_safe(updated)
-        agent.apply_runtime_config(updated, provider)
-        if exec_tool := agent.tools.get("exec"):
-            if hasattr(exec_tool, "set_approval_channel"):
-                exec_tool.set_approval_channel(web_channel)
+        _apply_updated_config(updated)
 
         return JSONResponse({
             "status": "ok",
             "message": "已保存，当前会话已热更新",
+            "runtime": _runtime_status(),
+        })
+
+    @app.post("/api/runtime/exec-mode")
+    async def save_exec_mode_api(payload: dict[str, Any]):
+        from nanobot.config.loader import load_config, save_config
+        from nanobot.config.schema import Config as CfgClass
+
+        mode = str(payload.get("mode", "")).strip()
+        if mode not in {"chat", "approval", "auto"}:
+            return JSONResponse({"status": "error", "message": "无效的命令执行模式"}, status_code=400)
+
+        cfg = load_config()
+        current = cfg.model_dump(by_alias=True)
+        current.setdefault("tools", {}).setdefault("exec", {})["mode"] = mode
+        updated = CfgClass(**current)
+        save_config(updated)
+        _apply_updated_config(updated)
+        return JSONResponse({
+            "status": "ok",
+            "message": "命令执行模式已更新",
             "runtime": _runtime_status(),
         })
 

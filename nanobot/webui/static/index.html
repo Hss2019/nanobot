@@ -132,6 +132,14 @@ tr:hover td{background:var(--accent-dim)}
 .approval-allow{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
 .approval-deny{background:rgba(248,113,113,.14);color:var(--red);border:1px solid rgba(248,113,113,.35)}
 .approval-note{font-size:11px;color:var(--text-dim)}
+.chat-runtime{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;border-top:1px solid var(--border);background:rgba(19,21,29,.65);flex-shrink:0}
+.mode-switch{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mode-label{font-size:12px;color:var(--text-muted);font-weight:600}
+.mode-pills{display:flex;gap:6px;flex-wrap:wrap}
+.mode-pill{border:1px solid var(--border);background:none;color:var(--text-muted);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.mode-pill:hover{border-color:var(--accent);color:var(--accent)}
+.mode-pill.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px var(--accent-glow)}
+.runtime-hint{font-size:11px;color:var(--text-dim)}
 .compose{display:flex;gap:10px;padding:14px 20px;background:var(--topbar-bg);border-top:1px solid var(--border);flex-shrink:0}
 .compose textarea{flex:1;background:var(--shell-bg);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius);font-size:13px;font-family:inherit;resize:none;outline:none;max-height:120px;line-height:1.5;transition:border-color .15s,box-shadow .15s}
 .compose textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
@@ -198,6 +206,17 @@ tr:hover td{background:var(--accent-dim)}
       <p>你的个人 AI 助手。输入消息开始对话，或点击侧边栏探索更多功能。</p>
     </div>
     <div class="messages" id="messages" style="display:none"></div>
+    <div class="chat-runtime">
+      <div class="mode-switch">
+        <span class="mode-label">命令模式</span>
+        <div class="mode-pills">
+          <button class="mode-pill" data-mode="chat" onclick="setExecMode('chat')">仅对话</button>
+          <button class="mode-pill" data-mode="approval" onclick="setExecMode('approval')">审批执行</button>
+          <button class="mode-pill" data-mode="auto" onclick="setExecMode('auto')">自动执行</button>
+        </div>
+      </div>
+      <span class="runtime-hint" id="execModeHint">当前模式：审批后执行</span>
+    </div>
     <div class="compose">
       <textarea id="input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" autofocus></textarea>
       <button id="sendBtn" onclick="sendMsg()">发送</button>
@@ -297,13 +316,6 @@ tr:hover td{background:var(--accent-dim)}
         </div>
         <div class="field-row">
           <div class="field"><label>Shell 超时 (秒)</label><input id="cfgTimeout" type="number" value="60"></div>
-          <div class="field"><label>命令执行模式</label>
-            <select id="cfgExecMode">
-              <option value="approval">审批后执行（默认）</option>
-              <option value="chat">仅对话，不执行命令</option>
-              <option value="auto">自动执行命令</option>
-            </select>
-          </div>
           <div class="field"><label>限制工具在工作区</label>
             <select id="cfgRestrict"><option value="false">否</option><option value="true">是</option></select>
           </div>
@@ -362,9 +374,14 @@ function formatFooterModel(model, provider){
 function formatExecModeLabel(mode){
   return mode==='chat'?'仅对话':mode==='auto'?'自动执行':'审批后执行';
 }
+function renderExecMode(mode){
+  document.querySelectorAll('.mode-pill').forEach(btn=>btn.classList.toggle('active',btn.dataset.mode===mode));
+  document.getElementById('execModeHint').textContent=`当前模式：${formatExecModeLabel(mode)}`;
+}
 function applyRuntimeStatus(d){
   document.getElementById('footerModel').textContent=formatFooterModel(d.model,d.provider);
   document.getElementById('noKeyBar').style.display=d.has_key?'none':'';
+  if(d.exec_mode)renderExecMode(d.exec_mode);
 }
 function ensureProgress(content){
   showMessages();
@@ -403,6 +420,18 @@ function resolveApproval(id, approved, btn){
 }
 function escapeHtml(s){
   return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+async function setExecMode(mode){
+  try{
+    const res=await fetch('/api/runtime/exec-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})});
+    const data=await res.json();
+    if(data.runtime)applyRuntimeStatus(data.runtime);
+    const m=document.getElementById('saveMsg');
+    if(m){
+      m.textContent=data.message||'已更新';
+      setTimeout(()=>m.textContent='',3000);
+    }
+  }catch(e){alert('更新命令模式失败: '+e.message)}
 }
 function connect(){
   const p=location.protocol==='https:'?'wss:':'ws:';
@@ -564,12 +593,11 @@ async function loadSettings(){
     document.getElementById('cfgBrave').value=t.web?.search?.apiKey||'';
     document.getElementById('cfgProxy').value=t.web?.proxy||'';
     document.getElementById('cfgTimeout').value=t.exec?.timeout??60;
-    document.getElementById('cfgExecMode').value=t.exec?.mode||'approval';
     document.getElementById('cfgRestrict').value=String(t.restrictToWorkspace??false);
   }catch(e){}
 }
 async function saveSettings(){
-  const pl={agents:{defaults:{model:document.getElementById('cfgModel').value,provider:document.getElementById('cfgProvider').value,temperature:parseFloat(document.getElementById('cfgTemp').value),maxTokens:parseInt(document.getElementById('cfgMaxTok').value),contextWindowTokens:parseInt(document.getElementById('cfgCtx').value)}},providers:{},tools:{web:{proxy:document.getElementById('cfgProxy').value||null,search:{apiKey:document.getElementById('cfgBrave').value}},exec:{timeout:parseInt(document.getElementById('cfgTimeout').value),mode:document.getElementById('cfgExecMode').value},restrictToWorkspace:document.getElementById('cfgRestrict').value==='true'}};
+  const pl={agents:{defaults:{model:document.getElementById('cfgModel').value,provider:document.getElementById('cfgProvider').value,temperature:parseFloat(document.getElementById('cfgTemp').value),maxTokens:parseInt(document.getElementById('cfgMaxTok').value),contextWindowTokens:parseInt(document.getElementById('cfgCtx').value)}},providers:{},tools:{web:{proxy:document.getElementById('cfgProxy').value||null,search:{apiKey:document.getElementById('cfgBrave').value}},exec:{timeout:parseInt(document.getElementById('cfgTimeout').value)},restrictToWorkspace:document.getElementById('cfgRestrict').value==='true'}};
   for(const p of PROVS){const v=document.getElementById('key_'+p.id).value;if(v&&!v.includes('***'))pl.providers[p.id]={apiKey:v}}
   const ck=document.getElementById('keyCustom').value,cb=document.getElementById('baseCustom').value;
   if((ck&&!ck.includes('***'))||cb){if(!pl.providers.custom)pl.providers.custom={};if(ck&&!ck.includes('***'))pl.providers.custom.apiKey=ck;if(cb)pl.providers.custom.apiBase=cb}
