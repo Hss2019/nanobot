@@ -142,7 +142,6 @@ tr:hover td{background:var(--accent-dim)}
 .mode-pill:hover{border-color:var(--accent);color:var(--accent)}
 .mode-pill.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px var(--accent-glow)}
 .runtime-hint{font-size:11px;color:var(--text-dim)}
-.runtime-subhint{font-size:11px;color:var(--text-dim);text-align:right;max-width:380px}
 .compose{display:flex;gap:10px;padding:14px 20px;background:var(--topbar-bg);border-top:1px solid var(--border);flex-shrink:0}
 .compose textarea{flex:1;background:var(--shell-bg);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius);font-size:13px;font-family:inherit;resize:none;outline:none;max-height:120px;line-height:1.5;transition:border-color .15s,box-shadow .15s}
 .compose textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
@@ -211,17 +210,14 @@ tr:hover td{background:var(--accent-dim)}
     <div class="messages" id="messages" style="display:none"></div>
     <div class="chat-runtime">
       <div class="mode-switch">
-        <span class="mode-label">Shell 命令</span>
+        <span class="mode-label">命令模式</span>
         <div class="mode-pills">
-          <button class="mode-pill" data-mode="chat" onclick="setExecMode('chat')">禁用 Shell</button>
-          <button class="mode-pill" data-mode="approval" onclick="setExecMode('approval')">审批后执行</button>
-          <button class="mode-pill" data-mode="auto" onclick="setExecMode('auto')">直接执行</button>
+          <button class="mode-pill" data-mode="chat" onclick="setExecMode('chat')">仅对话</button>
+          <button class="mode-pill" data-mode="approval" onclick="setExecMode('approval')">审批执行</button>
+          <button class="mode-pill" data-mode="auto" onclick="setExecMode('auto')">自动执行</button>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <span class="runtime-hint" id="execModeHint">当前模式：审批后执行</span>
-        <span class="runtime-subhint">仅对 PowerShell / Shell 命令生效，目录浏览和文件读取等内置工具不需审批。</span>
-      </div>
+      <span class="runtime-hint" id="execModeHint">当前模式：审批后执行</span>
     </div>
     <div class="compose">
       <textarea id="input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" autofocus></textarea>
@@ -385,7 +381,7 @@ function formatFooterModel(model, provider){
   return provider ? `${model||'--'} · ${provider}` : (model||'--');
 }
 function formatExecModeLabel(mode){
-  return mode==='chat'?'已禁用':mode==='auto'?'直接执行':'审批后执行';
+  return mode==='chat'?'仅对话':mode==='auto'?'自动执行':'审批执行';
 }
 function renderExecMode(mode){
   currentExecMode=mode||currentExecMode;
@@ -420,7 +416,7 @@ function renderApprovalRequest(d){
   const e=document.createElement('div');
   e.className='msg approval';
   e.dataset.approvalId=d.approval_id;
-  e.innerHTML=`<div class="approval-title">Shell 命令审批</div><div class="approval-command">${escapeHtml(d.command||'')}</div><div class="approval-actions"><button class="approval-allow" onclick="resolveApproval('${d.approval_id}', true, this)">批准执行</button><button class="approval-deny" onclick="resolveApproval('${d.approval_id}', false, this)">拒绝</button></div><div class="approval-note" style="margin-top:10px">当前为“审批后执行”模式。目录浏览、读文件等内置工具不会弹这个卡片。</div>`;
+  e.innerHTML=`<div class="approval-title">命令执行审批</div><div class="approval-command">${escapeHtml(d.command||'')}</div><div class="approval-actions"><button class="approval-allow" onclick="resolveApproval('${d.approval_id}', true, this)">批准执行</button><button class="approval-deny" onclick="resolveApproval('${d.approval_id}', false, this)">拒绝</button></div><div class="approval-note" style="margin-top:10px">当前为“审批执行”模式。</div>`;
   box.appendChild(e);
   scrollB();
 }
