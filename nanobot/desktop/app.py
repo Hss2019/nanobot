@@ -110,7 +110,7 @@ def start_desktop(
             def _create_icon() -> Image.Image:
                 img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
-                draw.ellipse([4, 4, 60, 60], fill=(233, 69, 96, 255))
+                draw.ellipse([4, 4, 60, 60], fill=(60, 135, 251, 255))
                 draw.text((16, 18), "C", fill=(255, 255, 255, 255))
                 return img
 
