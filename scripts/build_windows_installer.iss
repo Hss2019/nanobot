@@ -24,7 +24,11 @@ PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
+#ifexist "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
 Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+#else
+Name: "english"; MessagesFile: "compiler:Default.isl"
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"; Flags: unchecked
