@@ -127,6 +127,18 @@ class AgentLoop:
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
 
+    def _current_tool_definitions(self) -> list[dict[str, Any]]:
+        """Return tool definitions visible to the model for this turn."""
+        tool_defs = self.tools.get_definitions()
+        exec_tool = self.tools.get("exec")
+        if isinstance(exec_tool, ExecTool) and exec_tool.mode == "chat":
+            tool_defs = [
+                tool
+                for tool in tool_defs
+                if tool.get("function", {}).get("name") != "exec"
+            ]
+        return tool_defs
+
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
         if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
@@ -245,7 +257,7 @@ class AgentLoop:
         while iteration < self.max_iterations:
             iteration += 1
 
-            tool_defs = self.tools.get_definitions()
+            tool_defs = self._current_tool_definitions()
 
             response = await self.provider.chat_with_retry(
                 messages=messages,

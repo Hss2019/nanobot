@@ -213,7 +213,7 @@ tr:hover td{background:var(--accent-dim)}
       <div class="mode-switch">
         <span class="mode-label">Shell 命令</span>
         <div class="mode-pills">
-          <button class="mode-pill" data-mode="chat" onclick="setExecMode('chat')">仅对话</button>
+          <button class="mode-pill" data-mode="chat" onclick="setExecMode('chat')">禁用 Shell</button>
           <button class="mode-pill" data-mode="approval" onclick="setExecMode('approval')">审批后执行</button>
           <button class="mode-pill" data-mode="auto" onclick="setExecMode('auto')">直接执行</button>
         </div>
@@ -385,7 +385,7 @@ function formatFooterModel(model, provider){
   return provider ? `${model||'--'} · ${provider}` : (model||'--');
 }
 function formatExecModeLabel(mode){
-  return mode==='chat'?'仅对话':mode==='auto'?'直接执行':'审批后执行';
+  return mode==='chat'?'已禁用':mode==='auto'?'直接执行':'审批后执行';
 }
 function renderExecMode(mode){
   currentExecMode=mode||currentExecMode;
