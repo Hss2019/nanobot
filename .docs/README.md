@@ -1,4 +1,4 @@
-# Nanobot Development Docs
+# CMClaw Development Docs
 
 MD 文档为本的无状态开发管理。所有决策、进度、规格均以 Markdown 记录，仅靠文件系统 + git 追踪。
 
@@ -17,6 +17,12 @@ MD 文档为本的无状态开发管理。所有决策、进度、规格均以 M
 | 编号 | 标题 | 日期 | 状态 |
 |------|------|------|------|
 | [001](decisions/001-desktop-app.md) | 桌面应用方案选型 | 2026-03-12 | accepted |
+
+## 部署指南
+
+| 文档 | 说明 |
+|------|------|
+| [deploy.md](deploy.md) | CMClaw 部署、打包、故障排查完整流程 |
 
 ## 功能规格
 
