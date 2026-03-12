@@ -63,7 +63,6 @@ cmd += [
     "--hidden-import", "pystray",
     "--hidden-import", "tiktoken_ext.openai_public",
     "--hidden-import", "tiktoken_ext",
-    "--collect-data", "litellm",
     # Console mode (shows logs; use --windowed for no console)
     "--console",
     str(ENTRY),
