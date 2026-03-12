@@ -172,7 +172,9 @@ def main(
 
 
 @app.command()
-def onboard():
+def onboard(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts (refresh mode)"),
+):
     """Initialize nanobot configuration and workspace."""
     from nanobot.config.loader import get_config_path, load_config, save_config
     from nanobot.config.schema import Config
@@ -180,17 +182,23 @@ def onboard():
     config_path = get_config_path()
 
     if config_path.exists():
-        console.print(f"[yellow]Config already exists at {config_path}[/yellow]")
-        console.print("  [bold]y[/bold] = overwrite with defaults (existing values will be lost)")
-        console.print("  [bold]N[/bold] = refresh config, keeping existing values and adding new fields")
-        if typer.confirm("Overwrite?"):
-            config = Config()
-            save_config(config)
-            console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
-        else:
+        if yes:
+            # Non-interactive: refresh config keeping existing values
             config = load_config()
             save_config(config)
             console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
+        else:
+            console.print(f"[yellow]Config already exists at {config_path}[/yellow]")
+            console.print("  [bold]y[/bold] = overwrite with defaults (existing values will be lost)")
+            console.print("  [bold]N[/bold] = refresh config, keeping existing values and adding new fields")
+            if typer.confirm("Overwrite?"):
+                config = Config()
+                save_config(config)
+                console.print(f"[green]✓[/green] Config reset to defaults at {config_path}")
+            else:
+                config = load_config()
+                save_config(config)
+                console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
     else:
         save_config(Config())
         console.print(f"[green]✓[/green] Created config at {config_path}")
@@ -273,6 +281,35 @@ def _make_provider(config: Config):
         reasoning_effort=defaults.reasoning_effort,
     )
     return provider
+
+
+def _make_provider_safe(config: Config):
+    """Create LLM provider, returning a placeholder if no API key is configured.
+
+    Unlike _make_provider, this never calls typer.Exit — it returns a
+    LiteLLMProvider with no key so the desktop UI can still start and let
+    the user configure their key through the Settings panel.
+    """
+    try:
+        return _make_provider(config)
+    except SystemExit:
+        from nanobot.providers.base import GenerationSettings
+        from nanobot.providers.litellm_provider import LiteLLMProvider
+
+        provider = LiteLLMProvider(
+            api_key=None,
+            api_base=None,
+            default_model=config.agents.defaults.model,
+            extra_headers=None,
+            provider_name=None,
+        )
+        defaults = config.agents.defaults
+        provider.generation = GenerationSettings(
+            temperature=defaults.temperature,
+            max_tokens=defaults.max_tokens,
+            reasoning_effort=defaults.reasoning_effort,
+        )
+        return provider
 
 
 def _load_runtime_config(config: str | None = None, workspace: str | None = None) -> Config:
@@ -519,11 +556,13 @@ def desktop(
     console.print(f"{__logo__} Starting nanobot desktop on {host}:{port}...")
 
     bus = MessageBus()
-    provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
 
     cron_store_path = get_cron_dir() / "jobs.json"
     cron = CronService(cron_store_path)
+
+    # Allow starting without API key — provider created lazily or as placeholder
+    provider = _make_provider_safe(config)
 
     agent = AgentLoop(
         bus=bus,
@@ -553,7 +592,11 @@ def desktop(
         session_manager=session_manager,
     )
 
-    console.print(f"[green]✓[/green] Model: {config.agents.defaults.model}")
+    has_key = bool(config.get_api_key())
+    if has_key:
+        console.print(f"[green]✓[/green] Model: {config.agents.defaults.model}")
+    else:
+        console.print("[yellow]![/yellow] No API key configured — set one in the Settings panel")
     console.print(f"[green]✓[/green] Desktop UI: http://{host}:{port}")
 
     # Launch desktop (pywebview + pystray + uvicorn)

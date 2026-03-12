@@ -33,20 +33,51 @@ def create_app(
     from fastapi.responses import FileResponse, JSONResponse
 
     agent_task: asyncio.Task | None = None
+    dispatcher_task: asyncio.Task | None = None
+
+    async def _dispatch_outbound():
+        """Consume outbound messages from the bus and route them to WebChannel.
+
+        This replaces ChannelManager._dispatch_outbound() for desktop mode
+        where we only have the web channel.
+        """
+        bus = agent.bus
+        while True:
+            try:
+                msg = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
+
+                # Respect send_progress / send_tool_hints settings
+                if msg.metadata.get("_progress"):
+                    if msg.metadata.get("_tool_hint") and not config.channels.send_tool_hints:
+                        continue
+                    if not msg.metadata.get("_tool_hint") and not config.channels.send_progress:
+                        continue
+
+                if msg.channel == "web" or web_channel.connected_clients > 0:
+                    try:
+                        await web_channel.send(msg)
+                    except Exception as e:
+                        logger.error("Error sending to web channel: {}", e)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal agent_task
+        nonlocal agent_task, dispatcher_task
         agent_task = asyncio.create_task(agent.run())
-        logger.info("Agent loop started as background task")
+        dispatcher_task = asyncio.create_task(_dispatch_outbound())
+        logger.info("Agent loop + outbound dispatcher started")
         yield
         agent.stop()
-        if agent_task:
-            agent_task.cancel()
-            try:
-                await agent_task
-            except asyncio.CancelledError:
-                pass
+        for task in [agent_task, dispatcher_task]:
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         await agent.close_mcp()
 
     app = FastAPI(title="nanobot", lifespan=lifespan)
@@ -65,15 +96,12 @@ def create_app(
         chat_id = f"web_{uuid.uuid4().hex[:8]}"
         await web_channel.register_ws(chat_id, ws)
 
-        # Background task: forward outbound messages from bus to this WS
-        # (handled by ChannelManager dispatcher, not here)
-
         try:
-            # Send welcome with chat_id so client can persist it
             await ws.send_text(json.dumps({
                 "type": "connected",
                 "chat_id": chat_id,
                 "model": config.agents.defaults.model,
+                "has_key": bool(config.get_api_key()),
             }, ensure_ascii=False))
 
             while True:
@@ -122,13 +150,14 @@ def create_app(
         from nanobot.config.schema import Config as CfgClass
         updated = CfgClass(**current)
         save_config(updated)
-        return JSONResponse({"status": "ok"})
+        return JSONResponse({"status": "ok", "message": "Settings saved. Restart to apply changes."})
 
     @app.get("/api/status")
     async def get_status():
         return JSONResponse({
             "model": config.agents.defaults.model,
             "provider": config.agents.defaults.provider,
+            "has_key": bool(config.get_api_key()),
             "web_clients": web_channel.connected_clients,
             "sessions": len(session_manager.list_sessions()),
         })

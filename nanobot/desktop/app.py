@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import atexit
+import os
+import signal
 import sys
 import threading
-from typing import TYPE_CHECKING
+import time
 
 from loguru import logger
-
-if TYPE_CHECKING:
-    pass
 
 
 def start_desktop(
@@ -25,10 +25,12 @@ def start_desktop(
     - uvicorn HTTP server in a background daemon thread
     - pystray system tray icon in a background daemon thread
     - pywebview native window on the main thread (required by Windows)
+
+    On quit (tray menu, window close without tray, Ctrl+C, or SIGTERM)
+    all threads are stopped and the process exits cleanly.
     """
     import uvicorn
 
-    # --- 1. Start uvicorn in background thread ---
     server_config = uvicorn.Config(
         app,
         host=host,
@@ -38,11 +40,56 @@ def start_desktop(
     )
     server = uvicorn.Server(server_config)
 
+    # Track components for cleanup
+    _tray = None
+    _window = None
+    _shutdown_called = threading.Event()
+
+    def _shutdown():
+        """Forcefully shut down all components."""
+        if _shutdown_called.is_set():
+            return
+        _shutdown_called.set()
+        logger.info("Shutting down desktop app...")
+
+        server.should_exit = True
+
+        if _tray:
+            try:
+                _tray.stop()
+            except Exception:
+                pass
+
+        if _window:
+            try:
+                _window.destroy()
+            except Exception:
+                pass
+
+        # Give threads 2s to finish, then force exit
+        def _force_exit():
+            time.sleep(2)
+            if not _shutdown_called.is_set():
+                return
+            logger.debug("Force exit")
+            os._exit(0)
+
+        threading.Thread(target=_force_exit, daemon=True).start()
+
+    # Register cleanup handlers
+    atexit.register(_shutdown)
+
+    def _signal_handler(sig, frame):
+        _shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
+    # --- 1. Start uvicorn in background thread ---
     server_thread = threading.Thread(target=server.run, daemon=True, name="uvicorn")
     server_thread.start()
 
-    # Wait for server to be ready
-    import time
     for _ in range(50):
         if server.started:
             break
@@ -51,85 +98,64 @@ def start_desktop(
     url = f"http://{host}:{port}"
     logger.info("Backend ready at {}", url)
 
-    # --- 2. Try to launch pywebview (native window) ---
-    window = None
-    tray = None
-
+    # --- 2. Try pywebview (native window) ---
     try:
         import webview
 
-        def _on_closing():
-            """Minimize to tray instead of quitting (if tray is available)."""
-            if tray and window:
-                window.hide()
-                return False  # prevent close
-            return True  # allow close
-
-        def _show_window():
-            if window:
-                window.show()
-                window.restore()
-
-        def _quit_app():
-            if tray:
-                tray.stop()
-            if window:
-                window.destroy()
-            server.should_exit = True
-
-        # --- 3. Try to set up system tray ---
+        # --- 3. Try system tray ---
         try:
             import pystray
             from PIL import Image, ImageDraw
 
-            def _create_tray_icon() -> Image.Image:
-                """Create a simple colored circle icon."""
+            def _create_icon() -> Image.Image:
                 img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
                 draw.ellipse([4, 4, 60, 60], fill=(233, 69, 96, 255))
                 draw.text((20, 18), "N", fill=(255, 255, 255, 255))
                 return img
 
-            menu = pystray.Menu(
-                pystray.MenuItem("Open Nanobot", lambda: _show_window(), default=True),
-                pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Quit", lambda: _quit_app()),
-            )
-            tray = pystray.Icon("nanobot", _create_tray_icon(), "Nanobot", menu)
+            def _show():
+                if _window:
+                    _window.show()
+                    _window.restore()
 
-            tray_thread = threading.Thread(target=tray.run, daemon=True, name="tray")
-            tray_thread.start()
+            menu = pystray.Menu(
+                pystray.MenuItem("Open Nanobot", lambda: _show(), default=True),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Quit", lambda: _shutdown()),
+            )
+            _tray = pystray.Icon("nanobot", _create_icon(), "Nanobot", menu)
+            threading.Thread(target=_tray.run, daemon=True, name="tray").start()
             logger.info("System tray icon active")
         except ImportError:
-            logger.info("pystray/Pillow not available — no system tray icon")
+            logger.info("pystray/Pillow not available — no tray icon")
 
-        # --- 4. Launch native window on main thread ---
-        window = webview.create_window(
-            title,
-            url,
-            width=900,
-            height=700,
-            min_size=(500, 400),
+        # --- 4. Native window on main thread ---
+        _window = webview.create_window(
+            title, url,
+            width=1100, height=750,
+            min_size=(600, 450),
         )
-        if tray:
-            window.events.closing += _on_closing
+
+        def _on_closing():
+            """When tray exists: minimize to tray. Otherwise: quit."""
+            if _tray:
+                _window.hide()
+                return False
+            _shutdown()
+            return True
+
+        _window.events.closing += _on_closing
 
         webview.start()
 
     except ImportError:
-        logger.info("pywebview not available — falling back to browser")
+        logger.info("pywebview not available — opening browser")
         import webbrowser
         webbrowser.open(url)
-        # Keep main thread alive
         try:
             server_thread.join()
         except KeyboardInterrupt:
             pass
 
-    # Cleanup
-    server.should_exit = True
-    if tray:
-        try:
-            tray.stop()
-        except Exception:
-            pass
+    _shutdown()
