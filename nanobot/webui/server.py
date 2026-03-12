@@ -83,7 +83,10 @@ def create_app(
 
     @app.get("/static/{path:path}")
     async def static_file(path: str):
-        file = _STATIC_DIR / path
+        file = (_STATIC_DIR / path).resolve()
+        if not str(file).startswith(str(_STATIC_DIR.resolve())):
+            from fastapi.responses import Response
+            return Response(status_code=403)
         if file.exists() and file.is_file():
             return FileResponse(file)
         from fastapi.responses import Response
@@ -224,10 +227,11 @@ def create_app(
     @app.get("/api/tools")
     async def list_tools():
         tools = []
-        for name, tool in agent.tools.items():
+        for name in agent.tools.tool_names:
+            tool = agent.tools.get(name)
             tools.append({
                 "name": name,
-                "description": getattr(tool, 'description', ''),
+                "description": getattr(tool, 'description', '') if tool else '',
             })
         return JSONResponse(tools)
 
