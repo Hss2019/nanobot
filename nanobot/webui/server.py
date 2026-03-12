@@ -139,7 +139,13 @@ def create_app(
 
     @app.websocket("/ws")
     async def websocket_chat(ws: WebSocket):
-        chat_id = f"web_{uuid.uuid4().hex[:8]}"
+        requested_session_key = (ws.query_params.get("session_key") or "").strip()
+        if requested_session_key.startswith("web:") and requested_session_key.split(":", 1)[1]:
+            session_key = requested_session_key
+            chat_id = session_key.split(":", 1)[1]
+        else:
+            chat_id = f"web_{uuid.uuid4().hex[:8]}"
+            session_key = f"web:{chat_id}"
         try:
             await ws.accept()
         except Exception as e:
@@ -156,7 +162,6 @@ def create_app(
             # Load existing session history (defensive)
             history_msgs = []
             try:
-                session_key = f"web:{chat_id}"
                 session = session_manager.get_or_create(session_key)
                 for m in session.messages:
                     role = m.get("role", "")
@@ -171,6 +176,7 @@ def create_app(
             await ws.send_text(json.dumps({
                 "type": "connected", "chat_id": chat_id,
                 **_runtime_status(),
+                "session_key": session_key,
                 "history": history_msgs,
             }, ensure_ascii=False))
 
@@ -196,7 +202,7 @@ def create_app(
                 if msg_type == "command":
                     content = content if content.startswith("/") else f"/{content}"
                 await web_channel._handle_message(
-                    sender_id="web_user", chat_id=chat_id, content=content,
+                    sender_id="web_user", chat_id=chat_id, content=content, session_key=session_key,
                 )
         except WebSocketDisconnect:
             logger.info("WebSocket disconnected: {}", chat_id)

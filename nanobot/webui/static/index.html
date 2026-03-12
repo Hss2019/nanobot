@@ -118,11 +118,13 @@ tr:hover td{background:var(--accent-dim)}
 .msg.bot code{font-size:12.5px}
 .msg.bot p{margin:4px 0}.msg.bot ul,.msg.bot ol{margin:4px 0 4px 18px}
 .msg.bot table{border-collapse:collapse;margin:8px 0}.msg.bot th,.msg.bot td{border:1px solid var(--border);padding:4px 8px;font-size:12px}
-.msg.progress{align-self:flex-start;min-width:280px;max-width:460px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(60,135,251,.10),rgba(60,135,251,.04));box-shadow:var(--shadow)}
-.progress-label{font-size:12px;color:var(--accent);margin-bottom:10px;font-weight:600}
-.progress-track{height:6px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;position:relative}
-.progress-fill{position:absolute;inset:0 auto 0 -35%;width:35%;border-radius:999px;background:linear-gradient(90deg,rgba(90,155,255,0),rgba(90,155,255,.95),rgba(90,155,255,0));animation:loadingBar 1.2s ease-in-out infinite}
-@keyframes loadingBar{0%{left:-35%}100%{left:100%}}
+.msg.progress{align-self:flex-start;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:18px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(60,135,251,.10),rgba(60,135,251,.04));box-shadow:var(--shadow)}
+.progress-dots{display:flex;gap:6px;align-items:center}
+.progress-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);opacity:.22;animation:bubblePulse 1.1s infinite ease-in-out}
+.progress-dot:nth-child(2){animation-delay:.14s}
+.progress-dot:nth-child(3){animation-delay:.28s}
+.progress-label{font-size:12px;color:var(--text-muted);font-weight:600}
+@keyframes bubblePulse{0%,80%,100%{transform:scale(.72);opacity:.22}40%{transform:scale(1);opacity:1}}
 .msg.tool-hint{align-self:flex-start;color:var(--text-dim);font-size:11px;font-family:"SF Mono",Monaco,"Cascadia Code",Consolas,monospace;background:var(--accent-dim);padding:6px 12px;border-radius:6px;border-left:2px solid var(--accent);white-space:pre-wrap}
 .msg.approval{align-self:flex-start;min-width:320px;max-width:560px;padding:14px 16px;border-radius:12px;border:1px solid rgba(251,191,36,.35);background:linear-gradient(180deg,rgba(251,191,36,.10),rgba(251,191,36,.04));box-shadow:var(--shadow)}
 .approval-title{font-size:12px;color:var(--amber);font-weight:700;margin-bottom:10px}
@@ -362,8 +364,15 @@ function toggleTheme(){const l=document.documentElement.getAttribute('data-theme
 (function(){if(localStorage.getItem('cmclaw_theme')==='light'){document.documentElement.setAttribute('data-theme','light');document.getElementById('themeBtn').textContent='深色'}})();
 
 // ── WebSocket ──
-let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false;
+let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false,selectedSessionKey=null;
 function showMessages(){if(!hasMessages){hasMessages=true;document.getElementById('welcomeBox').style.display='none';document.getElementById('messages').style.display='flex'}}
+function resetChatView(){
+  document.getElementById('messages').innerHTML='';
+  document.getElementById('messages').style.display='none';
+  document.getElementById('welcomeBox').style.display='flex';
+  hasMessages=false;
+  clearProgress();
+}
 function formatProviderLabel(provider, configuredProvider){
   if(!provider)return '--';
   return configuredProvider&&configuredProvider!=='auto' ? provider : `${provider} (auto)`;
@@ -389,7 +398,7 @@ function ensureProgress(content){
   if(!progEl){
     progEl=document.createElement('div');
     progEl.className='msg progress';
-    progEl.innerHTML='<div class="progress-label"></div><div class="progress-track"><div class="progress-fill"></div></div>';
+    progEl.innerHTML='<div class="progress-dots"><span class="progress-dot"></span><span class="progress-dot"></span><span class="progress-dot"></span></div><div class="progress-label"></div>';
     box.appendChild(progEl);
   }
   progEl.querySelector('.progress-label').textContent=content||'正在处理中...';
@@ -435,7 +444,8 @@ async function setExecMode(mode){
 }
 function connect(){
   const p=location.protocol==='https:'?'wss:':'ws:';
-  ws=new WebSocket(`${p}//${location.host}/ws`);
+  const suffix=selectedSessionKey?`?session_key=${encodeURIComponent(selectedSessionKey)}`:'';
+  ws=new WebSocket(`${p}//${location.host}/ws${suffix}`);
   ws.onopen=()=>{setConn(true);reDelay=1e3};
   ws.onclose=()=>{setConn(false);setTimeout(connect,reDelay);reDelay=Math.min(reDelay*2,1e4)};
   ws.onmessage=e=>handle(JSON.parse(e.data));
@@ -445,7 +455,9 @@ function handle(d){
   const box=document.getElementById('messages');
   if(d.type==='connected'){
     chatId=d.chat_id;
+    selectedSessionKey=d.session_key||selectedSessionKey;
     applyRuntimeStatus(d);
+    resetChatView();
     // Restore chat history
     if(d.history&&d.history.length>0){
       showMessages();
@@ -499,14 +511,26 @@ async function loadSessions(){
     c.innerHTML='<table><tr><th>会话 Key</th><th>消息数</th><th>最后更新</th><th>操作</th></tr>'+list.map(s=>{
       const key=s.key||'';
       const ek=key.replace(/'/g,"\\'");
-      return `<tr><td style="font-family:monospace;font-size:12px">${key}</td><td>${s.messages??'--'}</td><td>${s.updated_at||''}</td><td><button class="btn-danger" onclick="delSession('${ek}')">删除</button></td></tr>`;
+      const current=selectedSessionKey===key?' <span class="tag blue">当前</span>':'';
+      return `<tr><td style="font-family:monospace;font-size:12px">${key}${current}</td><td>${s.messages??'--'}</td><td>${s.updated_at||''}</td><td><button class="btn btn-sm btn-outline" onclick="openSession('${ek}')" style="margin-right:6px">打开</button><button class="btn-danger" onclick="delSession('${ek}')">删除</button></td></tr>`;
     }).join('')+'</table>';
   }catch(e){c.innerHTML='<div class="empty">加载失败</div>'}
+}
+function openSession(key){
+  selectedSessionKey=key;
+  resetChatView();
+  go('chat');
+  if(ws){ws.close()}else{connect()}
 }
 async function delSession(key){
   if(!confirm('确定删除会话 '+key+' ？此操作不可撤销。'))return;
   try{
     await fetch('/api/sessions/'+encodeURIComponent(key),{method:'DELETE'});
+    if(selectedSessionKey===key){
+      selectedSessionKey=null;
+      resetChatView();
+      if(ws){ws.close()}
+    }
     loadSessions();
   }catch(e){alert('删除失败: '+e.message)}
 }
