@@ -55,6 +55,8 @@ def _safe_stderr_print(*parts: object) -> None:
 
 if __name__ == "__main__":
     try:
+        if getattr(sys, "frozen", False) and sys.platform == "win32" and len(sys.argv) == 1:
+            sys.argv.append("desktop")
         app()
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else 0

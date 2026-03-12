@@ -103,6 +103,10 @@ def start_desktop(
             break
         time.sleep(0.1)
 
+    if not server.started:
+        server.should_exit = True
+        raise RuntimeError(f"Desktop backend failed to start on http://{host}:{port}")
+
     url = f"http://{host}:{port}"
     logger.info("Backend ready at {}", url)
 

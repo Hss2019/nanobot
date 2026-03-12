@@ -41,13 +41,14 @@ def _run_smoke_test(exe_path: Path) -> None:
     """Fail fast on missing hidden imports before producing an installer."""
     print("\n运行构建后自检 ...")
     tests = [
-        [str(exe_path), "desktop", "--help"],
+        [str(exe_path), "desktop"],
         [str(exe_path), "status"],
     ]
     for cmd in tests:
         print(" ".join(cmd))
         env = dict(os.environ)
         env["PYTHONIOENCODING"] = "utf-8"
+        env["CMCLAW_DESKTOP_SMOKE"] = "1"
         result = subprocess.run(
             cmd,
             capture_output=True,

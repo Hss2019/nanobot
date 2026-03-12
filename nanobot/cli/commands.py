@@ -39,7 +39,7 @@ from nanobot.config.schema import Config
 from nanobot.utils.helpers import sync_workspace_templates
 
 app = typer.Typer(
-    name="nanobot",
+    name="cmclaw",
     help=f"{__logo__} CMClaw - Personal AI Assistant",
     no_args_is_help=True,
 )
@@ -606,6 +606,10 @@ def desktop(
 
     # Launch desktop (pywebview + pystray + uvicorn)
     from nanobot.desktop.app import start_desktop
+
+    if os.environ.get("CMCLAW_DESKTOP_SMOKE") == "1":
+        # Packaging self-check: imports, config wiring, and desktop launcher path resolved.
+        return
 
     start_desktop(app=fastapi_app, host=host, port=port)
 

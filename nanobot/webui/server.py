@@ -209,7 +209,7 @@ def create_app(
         except Exception as e:
             logger.error("WebSocket error for {}: {}", chat_id, e)
         finally:
-            await web_channel.unregister_ws(chat_id)
+            await web_channel.unregister_ws(chat_id, ws)
 
     # ── Config API ──
 
@@ -253,6 +253,8 @@ def create_app(
         updated = CfgClass(**current)
         save_config(updated)
         _apply_updated_config(updated)
+        if mode != "approval":
+            await web_channel.clear_exec_approvals()
         return JSONResponse({
             "status": "ok",
             "message": "命令执行模式已更新",

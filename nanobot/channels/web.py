@@ -54,7 +54,10 @@ class WebChannel(BaseChannel):
         async with lock:
             ws = self._connections.get(msg.chat_id)
         if not ws:
-            # Broadcast to all connections if chat_id not found
+            if msg.chat_id:
+                logger.debug("Dropping web message for disconnected chat_id={}", msg.chat_id)
+                return
+            # Broadcast only when no target chat_id is specified.
             async with lock:
                 targets = list(self._connections.items())
             for cid, w in targets:
@@ -93,10 +96,16 @@ class WebChannel(BaseChannel):
             self._connections[chat_id] = ws
         logger.info("Web client connected: {}", chat_id)
 
-    async def unregister_ws(self, chat_id: str) -> None:
+    async def unregister_ws(self, chat_id: str, ws: Any | None = None) -> None:
         """Unregister a WebSocket connection."""
         lock = self._get_lock()
         async with lock:
+            current = self._connections.get(chat_id)
+            if current is None:
+                return
+            if ws is not None and current is not ws:
+                logger.debug("Skip unregister for stale websocket chat_id={}", chat_id)
+                return
             self._connections.pop(chat_id, None)
             stale = [
                 approval_id
@@ -157,6 +166,23 @@ class WebChannel(BaseChannel):
             return False
         future.set_result(bool(approved))
         return True
+
+    async def clear_exec_approvals(self, chat_id: str | None = None) -> int:
+        """Reject pending exec approvals, optionally scoped to one chat."""
+        cleared = 0
+        lock = self._get_lock()
+        async with lock:
+            targets = [
+                approval_id
+                for approval_id, (pending_chat_id, _) in self._pending_exec_approvals.items()
+                if chat_id is None or pending_chat_id == chat_id
+            ]
+            for approval_id in targets:
+                _, future = self._pending_exec_approvals.pop(approval_id)
+                if not future.done():
+                    future.set_result(False)
+                    cleared += 1
+        return cleared
 
     @property
     def connected_clients(self) -> int:

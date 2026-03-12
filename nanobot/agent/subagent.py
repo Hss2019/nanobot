@@ -104,6 +104,12 @@ class SubagentManager:
             ))
             tools.register(WebSearchTool(api_key=self.brave_api_key, proxy=self.web_proxy))
             tools.register(WebFetchTool(proxy=self.web_proxy))
+            tool_defs = tools.get_definitions()
+            if self.exec_config.mode in ("chat", "approval"):
+                tool_defs = [
+                    tool for tool in tool_defs
+                    if tool.get("function", {}).get("name") != "exec"
+                ]
             
             system_prompt = self._build_subagent_prompt()
             messages: list[dict[str, Any]] = [
@@ -121,7 +127,7 @@ class SubagentManager:
 
                 response = await self.provider.chat_with_retry(
                     messages=messages,
-                    tools=tools.get_definitions(),
+                    tools=tool_defs,
                     model=self.model,
                 )
 

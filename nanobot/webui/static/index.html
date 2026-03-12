@@ -527,7 +527,8 @@ async function loadSessions(){
       const key=s.key||'';
       const ek=key.replace(/'/g,"\\'");
       const current=selectedSessionKey===key?' <span class="tag blue">当前</span>':'';
-      return `<tr><td style="font-family:monospace;font-size:12px">${key}${current}</td><td>${s.messages??'--'}</td><td>${s.updated_at||''}</td><td><button class="btn btn-sm btn-outline" onclick="openSession('${ek}')" style="margin-right:6px">打开</button><button class="btn-danger" onclick="delSession('${ek}')">删除</button></td></tr>`;
+      const openBtn=key.startsWith('web:')?`<button class="btn btn-sm btn-outline" onclick="openSession('${ek}')" style="margin-right:6px">打开</button>`:'<span class="tag amber">只读</span>';
+      return `<tr><td style="font-family:monospace;font-size:12px">${key}${current}</td><td>${s.messages??'--'}</td><td>${s.updated_at||''}</td><td>${openBtn}<button class="btn-danger" onclick="delSession('${ek}')">删除</button></td></tr>`;
     }).join('')+'</table>';
   }catch(e){c.innerHTML='<div class="empty">加载失败</div>'}
 }

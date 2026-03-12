@@ -81,7 +81,7 @@
 ## Table of Contents
 
 - [News](#-news)
-- [Key Features](#key-features-of-nanobot)
+- [Key Features](#key-features-of-cmclaw)
 - [Architecture](#️-architecture)
 - [Features](#-features)
 - [Install](#-install)

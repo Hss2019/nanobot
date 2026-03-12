@@ -110,6 +110,8 @@ class ExecTool(Tool):
             approved = await self._approval_channel.request_exec_approval(self._chat_id, command)
             if not approved:
                 return "Error: Command execution was not approved"
+            if self.mode != "approval":
+                return "Error: Command approval expired because execution mode changed"
 
         guard_error = self._guard_command(command, cwd)
         if guard_error:
