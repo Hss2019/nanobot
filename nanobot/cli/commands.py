@@ -317,6 +317,50 @@ def _make_provider_safe(config: Config):
         return provider
 
 
+def _build_cron_job_handler(agent, bus):
+    """Create the cron callback used by gateway and desktop modes."""
+    from nanobot.agent.tools.cron import CronTool
+    from nanobot.agent.tools.message import MessageTool
+
+    async def on_cron_job(job) -> str | None:
+        reminder_note = (
+            "[Scheduled Task] Timer finished.\n\n"
+            f"Task '{job.name}' has been triggered.\n"
+            f"Scheduled instruction: {job.payload.message}"
+        )
+
+        cron_tool = agent.tools.get("cron")
+        cron_token = None
+        if isinstance(cron_tool, CronTool):
+            cron_token = cron_tool.set_cron_context(True)
+        try:
+            response = await agent.process_direct(
+                reminder_note,
+                session_key=f"cron:{job.id}",
+                channel=job.payload.channel or "cli",
+                chat_id=job.payload.to or "direct",
+            )
+        finally:
+            if isinstance(cron_tool, CronTool) and cron_token is not None:
+                cron_tool.reset_cron_context(cron_token)
+
+        message_tool = agent.tools.get("message")
+        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
+            return response
+
+        if job.payload.deliver and job.payload.to and response:
+            from nanobot.bus.events import OutboundMessage
+
+            await bus.publish_outbound(OutboundMessage(
+                channel=job.payload.channel or "cli",
+                chat_id=job.payload.to,
+                content=response,
+            ))
+        return response
+
+    return on_cron_job
+
+
 def _load_runtime_config(config: str | None = None, workspace: str | None = None) -> Config:
     """Load config and optionally override the active workspace."""
     from nanobot.config.loader import load_config, set_config_path
@@ -364,7 +408,6 @@ def gateway(
     from nanobot.channels.manager import ChannelManager
     from nanobot.config.paths import get_cron_dir
     from nanobot.cron.service import CronService
-    from nanobot.cron.types import CronJob
     from nanobot.heartbeat.service import HeartbeatService
     from nanobot.session.manager import SessionManager
 
@@ -399,51 +442,14 @@ def gateway(
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        disabled_tools=config.tools.disabled_tools,
+        disabled_skills=config.agents.disabled_skills,
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
     )
 
-    # Set cron callback (needs agent)
-    async def on_cron_job(job: CronJob) -> str | None:
-        """Execute a cron job through the agent."""
-        from nanobot.agent.tools.cron import CronTool
-        from nanobot.agent.tools.message import MessageTool
-        reminder_note = (
-            "[Scheduled Task] Timer finished.\n\n"
-            f"Task '{job.name}' has been triggered.\n"
-            f"Scheduled instruction: {job.payload.message}"
-        )
-
-        # Prevent the agent from scheduling new cron jobs during execution
-        cron_tool = agent.tools.get("cron")
-        cron_token = None
-        if isinstance(cron_tool, CronTool):
-            cron_token = cron_tool.set_cron_context(True)
-        try:
-            response = await agent.process_direct(
-                reminder_note,
-                session_key=f"cron:{job.id}",
-                channel=job.payload.channel or "cli",
-                chat_id=job.payload.to or "direct",
-            )
-        finally:
-            if isinstance(cron_tool, CronTool) and cron_token is not None:
-                cron_tool.reset_cron_context(cron_token)
-
-        message_tool = agent.tools.get("message")
-        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
-            return response
-
-        if job.payload.deliver and job.payload.to and response:
-            from nanobot.bus.events import OutboundMessage
-            await bus.publish_outbound(OutboundMessage(
-                channel=job.payload.channel or "cli",
-                chat_id=job.payload.to,
-                content=response
-            ))
-        return response
-    cron.on_job = on_cron_job
+    cron.on_job = _build_cron_job_handler(agent, bus)
 
     # Create channel manager
     channels = ChannelManager(config, bus)
@@ -581,10 +587,13 @@ def desktop(
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        disabled_tools=config.tools.disabled_tools,
+        disabled_skills=config.agents.disabled_skills,
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
     )
+    cron.on_job = _build_cron_job_handler(agent, bus)
 
     # Create web channel and register it with the bus manually
     web_channel = WebChannel(web_cfg, bus)
@@ -664,6 +673,8 @@ def agent(
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        disabled_tools=config.tools.disabled_tools,
+        disabled_skills=config.agents.disabled_skills,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
     )

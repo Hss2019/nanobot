@@ -32,6 +32,8 @@ class SubagentManager:
         web_proxy: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
+        disabled_tools: list[str] | None = None,
+        disabled_skills: list[str] | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.provider = provider
@@ -42,6 +44,8 @@ class SubagentManager:
         self.web_proxy = web_proxy
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
+        self.disabled_tools = disabled_tools or []
+        self.disabled_skills = disabled_skills or []
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
 
@@ -104,6 +108,7 @@ class SubagentManager:
             ))
             tools.register(WebSearchTool(api_key=self.brave_api_key, proxy=self.web_proxy))
             tools.register(WebFetchTool(proxy=self.web_proxy))
+            tools.set_disabled_tools(self.disabled_tools)
             tool_defs = tools.get_definitions()
             if self.exec_config.mode in ("chat", "approval"):
                 tool_defs = [
@@ -217,7 +222,10 @@ Stay focused on the assigned task. Your final response will be reported back to 
 ## Workspace
 {self.workspace}"""]
 
-        skills_summary = SkillsLoader(self.workspace).build_skills_summary()
+        skills_summary = SkillsLoader(
+            self.workspace,
+            disabled_skills=self.disabled_skills,
+        ).build_skills_summary()
         if skills_summary:
             parts.append(f"## Skills\n\nRead SKILL.md with read_file to use a skill.\n\n{skills_summary}")
 

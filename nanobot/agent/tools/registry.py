@@ -14,6 +14,7 @@ class ToolRegistry:
 
     def __init__(self):
         self._tools: dict[str, Tool] = {}
+        self._disabled: set[str] = set()
 
     def register(self, tool: Tool) -> None:
         """Register a tool."""
@@ -33,7 +34,20 @@ class ToolRegistry:
 
     def get_definitions(self) -> list[dict[str, Any]]:
         """Get all tool definitions in OpenAI format."""
-        return [tool.to_schema() for tool in self._tools.values()]
+        return [tool.to_schema() for name, tool in self._tools.items() if name not in self._disabled]
+
+    def set_disabled_tools(self, names: list[str] | set[str]) -> None:
+        """Disable a subset of registered tools."""
+        self._disabled = {name for name in names if name in self._tools}
+
+    def is_enabled(self, name: str) -> bool:
+        """Return True when the tool is currently enabled."""
+        return name in self._tools and name not in self._disabled
+
+    @property
+    def registered_names(self) -> list[str]:
+        """Get list of all registered tool names including disabled ones."""
+        return list(self._tools.keys())
 
     async def execute(self, name: str, params: dict[str, Any]) -> str:
         """Execute a tool by name with given parameters."""
@@ -42,6 +56,8 @@ class ToolRegistry:
         tool = self._tools.get(name)
         if not tool:
             return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
+        if name in self._disabled:
+            return f"Error: Tool '{name}' is disabled" + _HINT
 
         try:
             # Attempt to cast parameters to match schema types
@@ -61,7 +77,7 @@ class ToolRegistry:
     @property
     def tool_names(self) -> list[str]:
         """Get list of registered tool names."""
-        return list(self._tools.keys())
+        return [name for name in self._tools.keys() if name not in self._disabled]
 
     def __len__(self) -> int:
         return len(self._tools)

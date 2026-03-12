@@ -18,10 +18,16 @@ class SkillsLoader:
     specific tools or perform certain tasks.
     """
 
-    def __init__(self, workspace: Path, builtin_skills_dir: Path | None = None):
+    def __init__(
+        self,
+        workspace: Path,
+        builtin_skills_dir: Path | None = None,
+        disabled_skills: list[str] | None = None,
+    ):
         self.workspace = workspace
         self.workspace_skills = workspace / "skills"
         self.builtin_skills = builtin_skills_dir or BUILTIN_SKILLS_DIR
+        self.disabled_skills = {name.strip() for name in (disabled_skills or []) if name.strip()}
 
     def list_skills(self, filter_unavailable: bool = True) -> list[dict[str, str]]:
         """
@@ -41,14 +47,19 @@ class SkillsLoader:
                 if skill_dir.is_dir():
                     skill_file = skill_dir / "SKILL.md"
                     if skill_file.exists():
-                        skills.append({"name": skill_dir.name, "path": str(skill_file), "source": "workspace"})
+                        if skill_dir.name not in self.disabled_skills:
+                            skills.append({"name": skill_dir.name, "path": str(skill_file), "source": "workspace"})
 
         # Built-in skills
         if self.builtin_skills and self.builtin_skills.exists():
             for skill_dir in self.builtin_skills.iterdir():
                 if skill_dir.is_dir():
                     skill_file = skill_dir / "SKILL.md"
-                    if skill_file.exists() and not any(s["name"] == skill_dir.name for s in skills):
+                    if (
+                        skill_file.exists()
+                        and skill_dir.name not in self.disabled_skills
+                        and not any(s["name"] == skill_dir.name for s in skills)
+                    ):
                         skills.append({"name": skill_dir.name, "path": str(skill_file), "source": "builtin"})
 
         # Filter by requirements
@@ -66,6 +77,9 @@ class SkillsLoader:
         Returns:
             Skill content or None if not found.
         """
+        if name in self.disabled_skills:
+            return None
+
         # Check workspace first
         workspace_skill = self.workspace_skills / name / "SKILL.md"
         if workspace_skill.exists():

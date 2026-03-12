@@ -58,6 +58,8 @@ class AgentLoop:
         exec_config: ExecToolConfig | None = None,
         cron_service: CronService | None = None,
         restrict_to_workspace: bool = False,
+        disabled_tools: list[str] | None = None,
+        disabled_skills: list[str] | None = None,
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
         channels_config: ChannelsConfig | None = None,
@@ -75,8 +77,10 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.disabled_tools = disabled_tools or []
+        self.disabled_skills = disabled_skills or []
 
-        self.context = ContextBuilder(workspace)
+        self.context = ContextBuilder(workspace, disabled_skills=self.disabled_skills)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -88,6 +92,8 @@ class AgentLoop:
             web_proxy=web_proxy,
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
+            disabled_tools=self.disabled_tools,
+            disabled_skills=self.disabled_skills,
         )
 
         self._running = False
@@ -107,6 +113,7 @@ class AgentLoop:
             get_tool_definitions=self.tools.get_definitions,
         )
         self._register_default_tools()
+        self.tools.set_disabled_tools(self.disabled_tools)
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
@@ -214,6 +221,9 @@ class AgentLoop:
         self.web_proxy = config.tools.web.proxy or None
         self.exec_config = config.tools.exec
         self.restrict_to_workspace = config.tools.restrict_to_workspace
+        self.disabled_tools = config.tools.disabled_tools
+        self.disabled_skills = config.agents.disabled_skills
+        self.context.skills.disabled_skills = {name.strip() for name in self.disabled_skills if name.strip()}
 
         self.subagents.provider = provider
         self.subagents.model = self.model
@@ -221,10 +231,13 @@ class AgentLoop:
         self.subagents.web_proxy = self.web_proxy
         self.subagents.exec_config = self.exec_config
         self.subagents.restrict_to_workspace = self.restrict_to_workspace
+        self.subagents.disabled_tools = self.disabled_tools
+        self.subagents.disabled_skills = self.disabled_skills
 
         self.memory_consolidator.provider = provider
         self.memory_consolidator.model = self.model
         self.memory_consolidator.context_window_tokens = self.context_window_tokens
+        self.tools.set_disabled_tools(self.disabled_tools)
 
         if exec_tool := self.tools.get("exec"):
             if isinstance(exec_tool, ExecTool):

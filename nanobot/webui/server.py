@@ -74,6 +74,28 @@ def create_app(
             "exec_mode": config.tools.exec.mode,
         }
 
+    def _workspace_docs() -> list[dict[str, Any]]:
+        ws = config.workspace_path
+        memory_dir = ws / "memory"
+        return [
+            {"id": "memory", "label": "长期记忆", "filename": "MEMORY.md", "path": memory_dir / "MEMORY.md"},
+            {"id": "history", "label": "历史日志", "filename": "HISTORY.md", "path": memory_dir / "HISTORY.md"},
+            {"id": "agents", "label": "代理说明", "filename": "AGENTS.md", "path": ws / "AGENTS.md"},
+            {"id": "soul", "label": "人格设定", "filename": "SOUL.md", "path": ws / "SOUL.md"},
+            {"id": "user", "label": "用户配置", "filename": "USER.md", "path": ws / "USER.md"},
+            {"id": "tools", "label": "工具说明", "filename": "TOOLS.md", "path": ws / "TOOLS.md"},
+            {"id": "heartbeat", "label": "心跳任务", "filename": "HEARTBEAT.md", "path": ws / "HEARTBEAT.md"},
+        ]
+
+    def _resolve_doc(doc_id: str) -> dict[str, Any] | None:
+        for doc in _workspace_docs():
+            if doc["id"] == doc_id:
+                return doc
+        return None
+
+    def _relative_doc_path(path: Path) -> str:
+        return str(path.relative_to(config.workspace_path)).replace("\\", "/")
+
     async def _dispatch_outbound():
         """Consume outbound messages from the bus and route to WebChannel."""
         bus = agent.bus
@@ -96,11 +118,16 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         nonlocal agent_task, dispatcher_task
+        cron_svc = getattr(agent, "_cron_service", None) or getattr(agent, "cron_service", None)
+        if cron_svc and not cron_svc.status().get("enabled"):
+            await cron_svc.start()
         agent_task = asyncio.create_task(agent.run())
         dispatcher_task = asyncio.create_task(_dispatch_outbound())
         logger.info("Agent loop + outbound dispatcher started")
         yield
         agent.stop()
+        if cron_svc:
+            cron_svc.stop()
         for task in [agent_task, dispatcher_task]:
             if task:
                 task.cancel()
@@ -238,6 +265,65 @@ def create_app(
             "runtime": _runtime_status(),
         })
 
+    @app.post("/api/config/test-provider")
+    async def test_provider_api(payload: dict[str, Any]):
+        from nanobot.cli.commands import _make_provider
+        from nanobot.config.loader import load_config
+        from nanobot.config.schema import Config as CfgClass
+
+        cfg = load_config()
+        current = cfg.model_dump(by_alias=True)
+
+        provider_name = str(payload.get("provider") or current.get("agents", {}).get("defaults", {}).get("provider") or "auto")
+        model = str(payload.get("model") or current.get("agents", {}).get("defaults", {}).get("model") or "").strip()
+        if model:
+            current.setdefault("agents", {}).setdefault("defaults", {})["model"] = model
+        current.setdefault("agents", {}).setdefault("defaults", {})["provider"] = provider_name
+
+        if provider_name and provider_name != "auto":
+            provider_cfg = current.setdefault("providers", {}).setdefault(provider_name, {})
+            api_key = str(payload.get("apiKey") or "").strip()
+            api_base = str(payload.get("apiBase") or "").strip()
+            if api_key and "***" not in api_key:
+                provider_cfg["apiKey"] = api_key
+            if api_base:
+                provider_cfg["apiBase"] = api_base
+
+        try:
+            test_cfg = CfgClass(**current)
+        except Exception as e:
+            return JSONResponse({"status": "error", "message": f"配置无效：{e}"}, status_code=400)
+
+        try:
+            provider = _make_provider(test_cfg)
+        except SystemExit:
+            return JSONResponse(
+                {"status": "error", "message": "当前 Provider 配置不完整，请先填写模型和密钥。"},
+                status_code=400,
+            )
+        except Exception as e:
+            return JSONResponse({"status": "error", "message": f"创建 Provider 失败：{e}"}, status_code=400)
+
+        try:
+            response = await provider.chat_with_retry(
+                messages=[{"role": "user", "content": "Reply with OK only."}],
+                tools=None,
+                model=test_cfg.agents.defaults.model,
+                max_tokens=24,
+                temperature=0,
+            )
+        except Exception as e:
+            return JSONResponse({"status": "error", "message": f"连接测试失败：{e}"}, status_code=400)
+
+        preview = (response.content or "").strip()
+        return JSONResponse({
+            "status": "ok",
+            "message": "连接测试成功",
+            "provider": test_cfg.get_provider_name(test_cfg.agents.defaults.model) or provider_name,
+            "model": test_cfg.agents.defaults.model,
+            "preview": preview[:120] if preview else "",
+        })
+
     @app.post("/api/runtime/exec-mode")
     async def save_exec_mode_api(payload: dict[str, Any]):
         from nanobot.config.loader import load_config, save_config
@@ -320,7 +406,8 @@ def create_app(
     @app.get("/api/skills")
     async def list_skills():
         from nanobot.agent.skills import SkillsLoader
-        loader = SkillsLoader(config.workspace_path)
+        disabled = {name.strip() for name in config.agents.disabled_skills if name.strip()}
+        loader = SkillsLoader(config.workspace_path, disabled_skills=[])
         all_skills = loader.list_skills(filter_unavailable=False)
         result = []
         for s in all_skills:
@@ -335,8 +422,30 @@ def create_app(
                 "available": available,
                 "missing": missing,
                 "always": skill_meta.get("always", False) or meta.get("always", False),
+                "enabled": s["name"] not in disabled,
             })
         return JSONResponse(result)
+
+    @app.post("/api/skills/{name}/toggle")
+    async def toggle_skill(name: str, payload: dict[str, Any]):
+        from nanobot.agent.skills import SkillsLoader
+        from nanobot.config.loader import load_config, save_config
+
+        enabled = bool(payload.get("enabled", True))
+        loader = SkillsLoader(config.workspace_path, disabled_skills=[])
+        known = {item["name"] for item in loader.list_skills(filter_unavailable=False)}
+        if name not in known:
+            return JSONResponse({"status": "error", "message": "技能不存在"}, status_code=404)
+        cfg = load_config()
+        disabled = {item.strip() for item in cfg.agents.disabled_skills if item.strip()}
+        if enabled:
+            disabled.discard(name)
+        else:
+            disabled.add(name)
+        cfg.agents.disabled_skills = sorted(disabled)
+        save_config(cfg)
+        _apply_updated_config(cfg)
+        return JSONResponse({"status": "ok", "enabled": enabled})
 
     # ── Cron API ──
 
@@ -380,8 +489,8 @@ def create_app(
     @app.get("/api/memory")
     async def get_memory():
         ws = config.workspace_path
-        memory_file = ws / "MEMORY.md"
-        history_file = ws / "HISTORY.md"
+        memory_file = ws / "memory" / "MEMORY.md"
+        history_file = ws / "memory" / "HISTORY.md"
         memory = memory_file.read_text(encoding="utf-8") if memory_file.exists() else ""
         history = history_file.read_text(encoding="utf-8") if history_file.exists() else ""
         return JSONResponse({"memory": memory, "history": history})
@@ -390,22 +499,80 @@ def create_app(
     async def save_memory(payload: dict[str, Any]):
         ws = config.workspace_path
         content = payload.get("memory", "")
-        memory_file = ws / "MEMORY.md"
+        memory_file = ws / "memory" / "MEMORY.md"
         memory_file.write_text(content, encoding="utf-8")
         return JSONResponse({"status": "ok", "message": "记忆已保存"})
+
+    @app.get("/api/docs")
+    async def list_docs():
+        docs = []
+        for doc in _workspace_docs():
+            path: Path = doc["path"]
+            docs.append({
+                "id": doc["id"],
+                "label": doc["label"],
+                "filename": doc["filename"],
+                "relativePath": _relative_doc_path(path),
+                "exists": path.exists(),
+            })
+        return JSONResponse(docs)
+
+    @app.get("/api/docs/{doc_id}")
+    async def get_doc(doc_id: str):
+        doc = _resolve_doc(doc_id)
+        if not doc:
+            return JSONResponse({"status": "error", "message": "文档不存在"}, status_code=404)
+        path: Path = doc["path"]
+        content = path.read_text(encoding="utf-8") if path.exists() else ""
+        return JSONResponse({
+            "id": doc["id"],
+            "label": doc["label"],
+            "filename": doc["filename"],
+            "relativePath": _relative_doc_path(path),
+            "content": content,
+        })
+
+    @app.post("/api/docs/{doc_id}")
+    async def save_doc(doc_id: str, payload: dict[str, Any]):
+        doc = _resolve_doc(doc_id)
+        if not doc:
+            return JSONResponse({"status": "error", "message": "文档不存在"}, status_code=404)
+        path: Path = doc["path"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(payload.get("content", "")), encoding="utf-8")
+        return JSONResponse({"status": "ok", "message": f"{doc['filename']} 已保存"})
 
     # ── Tools API ──
 
     @app.get("/api/tools")
     async def list_tools():
         tools = []
-        for name in agent.tools.tool_names:
+        for name in agent.tools.registered_names:
             tool = agent.tools.get(name)
             tools.append({
                 "name": name,
                 "description": getattr(tool, 'description', '') if tool else '',
+                "enabled": agent.tools.is_enabled(name),
             })
         return JSONResponse(tools)
+
+    @app.post("/api/tools/{name}/toggle")
+    async def toggle_tool(name: str, payload: dict[str, Any]):
+        from nanobot.config.loader import load_config, save_config
+
+        enabled = bool(payload.get("enabled", True))
+        if not agent.tools.has(name):
+            return JSONResponse({"status": "error", "message": "工具不存在"}, status_code=404)
+        cfg = load_config()
+        disabled = {item.strip() for item in cfg.tools.disabled_tools if item.strip()}
+        if enabled:
+            disabled.discard(name)
+        else:
+            disabled.add(name)
+        cfg.tools.disabled_tools = sorted(disabled)
+        save_config(cfg)
+        _apply_updated_config(cfg)
+        return JSONResponse({"status": "ok", "enabled": enabled})
 
     return app
 
