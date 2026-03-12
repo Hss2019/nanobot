@@ -81,6 +81,14 @@ def create_app(
     async def index():
         return FileResponse(_STATIC_DIR / "index.html", media_type="text/html")
 
+    @app.get("/static/{path:path}")
+    async def static_file(path: str):
+        file = _STATIC_DIR / path
+        if file.exists() and file.is_file():
+            return FileResponse(file)
+        from fastapi.responses import Response
+        return Response(status_code=404)
+
     # ── WebSocket Chat ──
 
     @app.websocket("/ws")
