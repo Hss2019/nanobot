@@ -31,7 +31,7 @@ check() {
     fi
 }
 
-check "nanobot Status"
+check "CMClaw Status"
 check "Config:"
 check "Workspace:"
 check "Model:"

@@ -1,4 +1,4 @@
-"""CLI commands for nanobot."""
+"""CLI commands for CMClaw."""
 
 import asyncio
 import os
@@ -35,7 +35,7 @@ from nanobot.utils.helpers import sync_workspace_templates
 
 app = typer.Typer(
     name="nanobot",
-    help=f"{__logo__} nanobot - Personal AI Assistant",
+    help=f"{__logo__} CMClaw - Personal AI Assistant",
     no_args_is_help=True,
 )
 
@@ -120,7 +120,7 @@ def _print_agent_response(response: str, render_markdown: bool) -> None:
     content = response or ""
     body = Markdown(content) if render_markdown else Text(content)
     console.print()
-    console.print(f"[cyan]{__logo__} nanobot[/cyan]")
+    console.print(f"[cyan]{__logo__} CMClaw[/cyan]")
     console.print(body)
     console.print()
 
@@ -152,7 +152,7 @@ async def _read_interactive_input_async() -> str:
 
 def version_callback(value: bool):
     if value:
-        console.print(f"{__logo__} nanobot v{__version__}")
+        console.print(f"{__logo__} CMClaw v{__version__}")
         raise typer.Exit()
 
 
@@ -162,7 +162,7 @@ def main(
         None, "--version", "-v", callback=version_callback, is_eager=True
     ),
 ):
-    """nanobot - Personal AI Assistant."""
+    """CMClaw - Personal AI Assistant."""
     pass
 
 
@@ -175,7 +175,7 @@ def main(
 def onboard(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts (refresh mode)"),
 ):
-    """Initialize nanobot configuration and workspace."""
+    """Initialize CMClaw configuration and workspace."""
     from nanobot.config.loader import get_config_path, load_config, save_config
     from nanobot.config.schema import Config
 
@@ -214,7 +214,7 @@ def onboard(
 
     sync_workspace_templates(workspace)
 
-    console.print(f"\n{__logo__} nanobot is ready!")
+    console.print(f"\n{__logo__} CMClaw is ready!")
     console.print("\nNext steps:")
     console.print("  1. Add your API key to [cyan]~/.nanobot/config.json[/cyan]")
     console.print("     Get one at: https://openrouter.ai/keys")
@@ -353,7 +353,7 @@ def gateway(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
 ):
-    """Start the nanobot gateway."""
+    """Start the CMClaw gateway."""
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
     from nanobot.channels.manager import ChannelManager
@@ -371,7 +371,7 @@ def gateway(
     _print_deprecated_memory_window_notice(config)
     port = port if port is not None else config.gateway.port
 
-    console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
+    console.print(f"{__logo__} Starting CMClaw gateway on port {port}...")
     sync_workspace_templates(config.workspace_path)
     bus = MessageBus()
     provider = _make_provider(config)
@@ -617,7 +617,7 @@ def agent(
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
     config: str | None = typer.Option(None, "--config", "-c", help="Config file path"),
     markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render assistant output as Markdown"),
-    logs: bool = typer.Option(False, "--logs/--no-logs", help="Show nanobot runtime logs during chat"),
+    logs: bool = typer.Option(False, "--logs/--no-logs", help="Show CMClaw runtime logs during chat"),
 ):
     """Interact with the agent directly."""
     from loguru import logger
@@ -665,7 +665,7 @@ def agent(
             from contextlib import nullcontext
             return nullcontext()
         # Animated spinner is safe to use with prompt_toolkit input handling
-        return console.status("[dim]nanobot is thinking...[/dim]", spinner="dots")
+        return console.status("[dim]CMClaw is thinking...[/dim]", spinner="dots")
 
     async def _cli_progress(content: str, *, tool_hint: bool = False) -> None:
         ch = agent_loop.channels_config
@@ -921,14 +921,14 @@ def channels_login():
 
 @app.command()
 def status():
-    """Show nanobot status."""
+    """Show CMClaw status."""
     from nanobot.config.loader import get_config_path, load_config
 
     config_path = get_config_path()
     config = load_config()
     workspace = config.workspace_path
 
-    console.print(f"{__logo__} nanobot Status\n")
+    console.print(f"{__logo__} CMClaw Status\n")
 
     console.print(f"Config: {config_path} {'[green]✓[/green]' if config_path.exists() else '[red]✗[/red]'}")
     console.print(f"Workspace: {workspace} {'[green]✓[/green]' if workspace.exists() else '[red]✗[/red]'}")

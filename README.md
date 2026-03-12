@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="nanobot_logo.png" alt="nanobot" width="500">
-  <h1>nanobot: Ultra-Lightweight Personal AI Assistant</h1>
+  <img src="nanobot_logo.png" alt="CMClaw" width="500">
+  <h1>CMClaw: Ultra-Lightweight Personal AI Assistant</h1>
   <p>
     <a href="https://pypi.org/project/nanobot-ai/"><img src="https://img.shields.io/pypi/v/nanobot-ai" alt="PyPI"></a>
     <a href="https://pepy.tech/project/nanobot-ai"><img src="https://static.pepy.tech/badge/nanobot-ai" alt="Downloads"></a>
@@ -12,7 +12,7 @@
   </p>
 </div>
 
-🐈 **nanobot** is an **ultra-lightweight** personal AI assistant inspired by [OpenClaw](https://github.com/openclaw/openclaw).
+🦞 **CMClaw** is an **ultra-lightweight** personal AI assistant inspired by [OpenClaw](https://github.com/openclaw/openclaw).
 
 ⚡️ Delivers core agent functionality with **99% fewer lines of code** than OpenClaw.
 
@@ -42,27 +42,27 @@
 - **2026-02-21** 🎉 Released **v0.1.4.post1** — new providers, media support across channels, and major stability improvements. See [release notes](https://github.com/HKUDS/nanobot/releases/tag/v0.1.4.post1) for details.
 - **2026-02-20** 🐦 Feishu now receives multimodal files from users. More reliable memory under the hood.
 - **2026-02-19** ✨ Slack now sends files, Discord splits long messages, and subagents work in CLI mode.
-- **2026-02-18** ⚡️ nanobot now supports VolcEngine, MCP custom auth headers, and Anthropic prompt caching.
+- **2026-02-18** ⚡️ CMClaw now supports VolcEngine, MCP custom auth headers, and Anthropic prompt caching.
 - **2026-02-17** 🎉 Released **v0.1.4** — MCP support, progress streaming, new providers, and multiple channel improvements. Please see [release notes](https://github.com/HKUDS/nanobot/releases/tag/v0.1.4) for details.
-- **2026-02-16** 🦞 nanobot now integrates a [ClawHub](https://clawhub.ai) skill — search and install public agent skills.
-- **2026-02-15** 🔑 nanobot now supports OpenAI Codex provider with OAuth login support.
-- **2026-02-14** 🔌 nanobot now supports MCP! See [MCP section](#mcp-model-context-protocol) for details.
+- **2026-02-16** 🦞 CMClaw now integrates a [ClawHub](https://clawhub.ai) skill — search and install public agent skills.
+- **2026-02-15** 🔑 CMClaw now supports OpenAI Codex provider with OAuth login support.
+- **2026-02-14** 🔌 CMClaw now supports MCP! See [MCP section](#mcp-model-context-protocol) for details.
 - **2026-02-13** 🎉 Released **v0.1.3.post7** — includes security hardening and multiple improvements. **Please upgrade to the latest version to address security issues**. See [release notes](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post7) for more details.
 - **2026-02-12** 🧠 Redesigned memory system — Less code, more reliable. Join the [discussion](https://github.com/HKUDS/nanobot/discussions/566) about it!
 - **2026-02-11** ✨ Enhanced CLI experience and added MiniMax support!
 - **2026-02-10** 🎉 Released **v0.1.3.post6** with improvements! Check the updates [notes](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post6) and our [roadmap](https://github.com/HKUDS/nanobot/discussions/431).
-- **2026-02-09** 💬 Added Slack, Email, and QQ support — nanobot now supports multiple chat platforms!
+- **2026-02-09** 💬 Added Slack, Email, and QQ support — CMClaw now supports multiple chat platforms!
 - **2026-02-08** 🔧 Refactored Providers—adding a new LLM provider now takes just 2 simple steps! Check [here](#providers).
 - **2026-02-07** 🚀 Released **v0.1.3.post5** with Qwen support & several key improvements! Check [here](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post5) for details.
 - **2026-02-06** ✨ Added Moonshot/Kimi provider, Discord integration, and enhanced security hardening!
 - **2026-02-05** ✨ Added Feishu channel, DeepSeek provider, and enhanced scheduled tasks support!
 - **2026-02-04** 🚀 Released **v0.1.3.post4** with multi-provider & Docker support! Check [here](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post4) for details.
 - **2026-02-03** ⚡ Integrated vLLM for local LLM support and improved natural language task scheduling!
-- **2026-02-02** 🎉 nanobot officially launched! Welcome to try 🐈 nanobot!
+- **2026-02-02** 🎉 CMClaw officially launched! Welcome to try CMClaw!
 
 </details>
 
-## Key Features of nanobot:
+## Key Features of CMClaw:
 
 🪶 **Ultra-Lightweight**: Just ~4,000 lines of core agent code — 99% smaller than Clawdbot.
 
@@ -214,7 +214,7 @@ That's it! You have a working AI assistant in 2 minutes.
 
 ## 💬 Chat Apps
 
-Connect nanobot to your favorite chat platform.
+Connect CMClaw to your favorite chat platform.
 
 | Channel | What you need |
 |---------|---------------|
@@ -268,15 +268,15 @@ nanobot gateway
 
 Uses **Socket.IO WebSocket** by default, with HTTP polling fallback.
 
-**1. Ask nanobot to set up Mochat for you**
+**1. Ask CMClaw to set up Mochat for you**
 
-Simply send this message to nanobot (replace `xxx@xxx` with your real email):
+Simply send this message to CMClaw (replace `xxx@xxx` with your real email):
 
 ```
 Read https://raw.githubusercontent.com/HKUDS/MoChat/refs/heads/main/skills/nanobot/skill.md and register on MoChat. My Email account is xxx@xxx Bind me as your owner and DM me on MoChat.
 ```
 
-nanobot will automatically register, configure `~/.nanobot/config.json`, and connect to Mochat.
+CMClaw will automatically register, configure `~/.nanobot/config.json`, and connect to Mochat.
 
 **2. Restart gateway**
 
@@ -284,7 +284,7 @@ nanobot will automatically register, configure `~/.nanobot/config.json`, and con
 nanobot gateway
 ```
 
-That's it — nanobot handles the rest!
+That's it — CMClaw handles the rest!
 
 <br>
 
@@ -620,7 +620,7 @@ Uses **Socket Mode** — no public URL required.
 - **App Home**: Scroll to **Show Tabs** → Enable **Messages Tab** → Check **"Allow users to send Slash commands and messages from the messages tab"**
 - **Install App**: Click **Install to Workspace** → Authorize → copy the **Bot Token** (`xoxb-...`)
 
-**3. Configure nanobot**
+**3. Configure CMClaw**
 
 ```json
 {
@@ -653,7 +653,7 @@ DM the bot directly or @mention it in a channel — it should respond!
 <details>
 <summary><b>Email</b></summary>
 
-Give nanobot its own email account. It polls **IMAP** for incoming mail and replies via **SMTP** — like a personal email assistant.
+Give CMClaw its own email account. It polls **IMAP** for incoming mail and replies via **SMTP** — like a personal email assistant.
 
 **1. Get credentials (Gmail example)**
 - Create a dedicated Gmail account for your bot (e.g. `my-nanobot@gmail.com`)
@@ -739,14 +739,14 @@ nanobot gateway
 
 ## 🌐 Agent Social Network
 
-🐈 nanobot is capable of linking to the agent social network (agent community). **Just send one message and your nanobot joins automatically!**
+CMClaw is capable of linking to the agent social network (agent community). **Just send one message and your CMClaw joins automatically!**
 
 | Platform | How to Join (send this message to your bot) |
 |----------|-------------|
 | [**Moltbook**](https://www.moltbook.com/) | `Read https://moltbook.com/skill.md and follow the instructions to join Moltbook` |
 | [**ClawdChat**](https://clawdchat.ai/) | `Read https://clawdchat.ai/skill.md and follow the instructions to join ClawdChat` |
 
-Simply send the command above to your nanobot (via CLI or any chat channel), and it will handle the rest.
+Simply send the command above to your CMClaw (via CLI or any chat channel), and it will handle the rest.
 
 ## ⚙️ Configuration
 
@@ -915,7 +915,7 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
 <details>
 <summary><b>Adding a New Provider (Developer Guide)</b></summary>
 
-nanobot uses a **Provider Registry** (`nanobot/providers/registry.py`) as the single source of truth.
+CMClaw uses a **Provider Registry** (`nanobot/providers/registry.py`) as the single source of truth.
 Adding a new provider only takes **2 steps** — no if-elif chains to touch.
 
 **Step 1.** Add a `ProviderSpec` entry to `PROVIDERS` in `nanobot/providers/registry.py`:
@@ -962,7 +962,7 @@ That's it! Environment variables, model prefixing, config matching, and `nanobot
 > [!TIP]
 > The config format is compatible with Claude Desktop / Cursor. You can copy MCP server configs directly from any MCP server's README.
 
-nanobot supports [MCP](https://modelcontextprotocol.io/) — connect external tool servers and use them as native agent tools.
+CMClaw supports [MCP](https://modelcontextprotocol.io/) — connect external tool servers and use them as native agent tools.
 
 Add MCP servers to your `config.json`:
 
@@ -1027,7 +1027,7 @@ MCP tools are automatically discovered and registered on startup. The LLM can us
 
 ## 🧩 Multiple Instances
 
-Run multiple nanobot instances simultaneously with separate configs and runtime data. Use `--config` as the main entrypoint, and optionally use `--workspace` to override the workspace for a specific run.
+Run multiple CMClaw instances simultaneously with separate configs and runtime data. Use `--config` as the main entrypoint, and optionally use `--workspace` to override the workspace for a specific run.
 
 ### Quick Start
 
@@ -1044,7 +1044,7 @@ nanobot gateway --config ~/.nanobot-feishu/config.json --port 18792
 
 ### Path Resolution
 
-When using `--config`, nanobot derives its runtime data directory from the config file location. The workspace still comes from `agents.defaults.workspace` unless you override it with `--workspace`.
+When using `--config`, CMClaw derives its runtime data directory from the config file location. The workspace still comes from `agents.defaults.workspace` unless you override it with `--workspace`.
 
 To open a CLI session against one of these instances locally:
 
@@ -1311,11 +1311,11 @@ PRs welcome! The codebase is intentionally small and readable. 🤗
 </div>
 
 <p align="center">
-  <em> Thanks for visiting ✨ nanobot!</em><br><br>
+  <em> Thanks for visiting ✨ CMClaw!</em><br><br>
   <img src="https://visitor-badge.laobi.icu/badge?page_id=HKUDS.nanobot&style=for-the-badge&color=00d4ff" alt="Views">
 </p>
 
 
 <p align="center">
-  <sub>nanobot is for educational, research, and technical exchange purposes only</sub>
+  <sub>CMClaw is for educational, research, and technical exchange purposes only</sub>
 </p>

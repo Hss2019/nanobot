@@ -58,7 +58,7 @@ async def test_group_send_uses_group_messages_api() -> None:
         "token",
         "group:conv123",
         "sampleMarkdown",
-        {"text": "hello", "title": "Nanobot Reply"},
+        {"text": "hello", "title": "CMClaw Reply"},
     )
 
     assert ok is True

@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in nanobot, please report it by:
+If you discover a security vulnerability in CMClaw, please report it by:
 
 1. **DO NOT** open a public GitHub issue
 2. Create a private security advisory on GitHub or contact the repository maintainers (xubinrencs@gmail.com)
@@ -67,7 +67,7 @@ The `exec` tool can execute shell commands. While dangerous command patterns are
 - ✅ Review all tool usage in agent logs
 - ✅ Understand what commands the agent is running
 - ✅ Use a dedicated user account with limited privileges
-- ✅ Never run nanobot as root
+- ✅ Never run CMClaw as root
 - ❌ Don't disable security checks
 - ❌ Don't run on systems with sensitive data without careful review
 
@@ -82,7 +82,7 @@ The `exec` tool can execute shell commands. While dangerous command patterns are
 
 File operations have path traversal protection, but:
 
-- ✅ Run nanobot with a dedicated user account
+- ✅ Run CMClaw with a dedicated user account
 - ✅ Use filesystem permissions to protect sensitive directories
 - ✅ Regularly audit file operations in logs
 - ❌ Don't give unrestricted access to sensitive files
@@ -123,7 +123,7 @@ npm audit fix
 - Keep `litellm` updated to the latest version for security fixes
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
 - Run `pip-audit` or `npm audit` regularly
-- Subscribe to security advisories for nanobot and its dependencies
+- Subscribe to security advisories for CMClaw and its dependencies
 
 ### 7. Production Deployment
 
@@ -237,7 +237,7 @@ If you suspect a security breach:
 
 ## Security Checklist
 
-Before deploying nanobot:
+Before deploying CMClaw:
 
 - [ ] API keys stored securely (not in code)
 - [ ] Config file permissions set to 0600
