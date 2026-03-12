@@ -52,6 +52,9 @@ _SAVED_TERM_ATTRS = None  # original termios settings, restored on exit
 
 def _flush_pending_tty_input() -> None:
     """Drop unread keypresses typed while the model was generating output."""
+    if sys.platform == "win32":
+        return  # termios/select not available on Windows; skip safely
+
     try:
         fd = sys.stdin.fileno()
         if not os.isatty(fd):
@@ -79,7 +82,7 @@ def _flush_pending_tty_input() -> None:
 
 def _restore_terminal() -> None:
     """Restore terminal to its original state (echo, line buffering, etc.)."""
-    if _SAVED_TERM_ATTRS is None:
+    if _SAVED_TERM_ATTRS is None or sys.platform == "win32":
         return
     try:
         import termios
@@ -92,12 +95,13 @@ def _init_prompt_session() -> None:
     """Create the prompt_toolkit session with persistent file history."""
     global _PROMPT_SESSION, _SAVED_TERM_ATTRS
 
-    # Save terminal state so we can restore it on exit
-    try:
-        import termios
-        _SAVED_TERM_ATTRS = termios.tcgetattr(sys.stdin.fileno())
-    except Exception:
-        pass
+    # Save terminal state so we can restore it on exit (Unix only)
+    if sys.platform != "win32":
+        try:
+            import termios
+            _SAVED_TERM_ATTRS = termios.tcgetattr(sys.stdin.fileno())
+        except Exception:
+            pass
 
     from nanobot.config.paths import get_cli_history_path
 
@@ -484,6 +488,78 @@ def gateway(
     asyncio.run(run())
 
 
+# ============================================================================
+# Desktop App
+# ============================================================================
+
+
+@app.command()
+def desktop(
+    port: int | None = typer.Option(None, "--port", "-p", help="WebUI port"),
+    workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+):
+    """Start nanobot as a desktop application with system tray."""
+    from nanobot.agent.loop import AgentLoop
+    from nanobot.bus.queue import MessageBus
+    from nanobot.channels.web import WebChannel
+    from nanobot.config.paths import get_cron_dir
+    from nanobot.cron.service import CronService
+    from nanobot.session.manager import SessionManager
+    from nanobot.webui.server import create_app
+
+    config = _load_runtime_config(config, workspace)
+    _print_deprecated_memory_window_notice(config)
+    sync_workspace_templates(config.workspace_path)
+
+    web_cfg = config.channels.web
+    host = web_cfg.host
+    port = port if port is not None else web_cfg.port
+
+    console.print(f"{__logo__} Starting nanobot desktop on {host}:{port}...")
+
+    bus = MessageBus()
+    provider = _make_provider(config)
+    session_manager = SessionManager(config.workspace_path)
+
+    cron_store_path = get_cron_dir() / "jobs.json"
+    cron = CronService(cron_store_path)
+
+    agent = AgentLoop(
+        bus=bus,
+        provider=provider,
+        workspace=config.workspace_path,
+        model=config.agents.defaults.model,
+        max_iterations=config.agents.defaults.max_tool_iterations,
+        context_window_tokens=config.agents.defaults.context_window_tokens,
+        brave_api_key=config.tools.web.search.api_key or None,
+        web_proxy=config.tools.web.proxy or None,
+        exec_config=config.tools.exec,
+        cron_service=cron,
+        restrict_to_workspace=config.tools.restrict_to_workspace,
+        session_manager=session_manager,
+        mcp_servers=config.tools.mcp_servers,
+        channels_config=config.channels,
+    )
+
+    # Create web channel and register it with the bus manually
+    web_channel = WebChannel(web_cfg, bus)
+
+    # Build the FastAPI app
+    fastapi_app = create_app(
+        config=config,
+        agent=agent,
+        web_channel=web_channel,
+        session_manager=session_manager,
+    )
+
+    console.print(f"[green]✓[/green] Model: {config.agents.defaults.model}")
+    console.print(f"[green]✓[/green] Desktop UI: http://{host}:{port}")
+
+    # Launch desktop (pywebview + pystray + uvicorn)
+    from nanobot.desktop.app import start_desktop
+
+    start_desktop(app=fastapi_app, host=host, port=port)
 
 
 # ============================================================================
