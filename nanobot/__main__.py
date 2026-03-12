@@ -45,7 +45,20 @@ def _show_windows_error(trace: str, log_path: Path | None) -> None:
 if __name__ == "__main__":
     try:
         app()
-    except BaseException:
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 0
+        if code in (0, None):
+            pass
+        else:
+            trace = traceback.format_exc()
+            log_path = _write_crash_log(trace)
+            print("\nCMClaw startup failed.\n", file=sys.stderr)
+            print(trace, file=sys.stderr)
+            if log_path:
+                print(f"Crash log saved to: {log_path}", file=sys.stderr)
+            _show_windows_error(trace, log_path)
+            raise
+    except Exception:
         trace = traceback.format_exc()
         log_path = _write_crash_log(trace)
         print("\nCMClaw startup failed.\n", file=sys.stderr)

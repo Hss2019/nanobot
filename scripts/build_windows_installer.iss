@@ -39,10 +39,18 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 
 [Files]
 Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+#ifexist "{#MyIconFile}"
+Source: "{#MyIconFile}"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 
 [Icons]
+#ifexist "{#MyIconFile}"
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "desktop"; WorkingDir: "{app}"; IconFilename: "{app}\cmclaw.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "desktop"; WorkingDir: "{app}"; IconFilename: "{app}\cmclaw.ico"; Tasks: desktopicon
+#else
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "desktop"; WorkingDir: "{app}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "desktop"; WorkingDir: "{app}"; Tasks: desktopicon
+#endif
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Parameters: "desktop"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
