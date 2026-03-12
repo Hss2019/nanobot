@@ -32,16 +32,20 @@ def start_desktop(
     """
     import uvicorn
 
-    server_config = uvicorn.Config(
-        app,
-        host=host,
-        port=port,
-        log_level="info",
-        loop="asyncio",
+    uvicorn_kwargs = {
+        "host": host,
+        "port": port,
+        "log_level": "info",
+        "loop": "asyncio",
         # Prefer wsproto for desktop webview compatibility and fewer
         # protocol-specific handshake edge cases.
-        ws="wsproto",
-    )
+        "ws": "wsproto",
+    }
+    if getattr(sys, "stdout", None) is None or getattr(sys, "stderr", None) is None:
+        uvicorn_kwargs["log_config"] = None
+        uvicorn_kwargs["access_log"] = False
+
+    server_config = uvicorn.Config(app, **uvicorn_kwargs)
     server = uvicorn.Server(server_config)
 
     # Track components for cleanup
