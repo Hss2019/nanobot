@@ -7,6 +7,7 @@ Usage (run on Windows):
 Output: dist/cmclaw/ directory containing cmclaw.exe
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -45,10 +46,19 @@ def _run_smoke_test(exe_path: Path) -> None:
     ]
     for cmd in tests:
         print(" ".join(cmd))
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        env = dict(os.environ)
+        env["PYTHONIOENCODING"] = "utf-8"
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=False,
+            env=env,
+        )
         if result.returncode != 0:
-            print(result.stdout)
-            print(result.stderr)
+            stdout = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+            stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+            print(stdout)
+            print(stderr)
             raise subprocess.CalledProcessError(result.returncode, cmd)
 
 cmd = [
