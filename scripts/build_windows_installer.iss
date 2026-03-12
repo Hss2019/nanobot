@@ -3,6 +3,7 @@
 #define MyAppPublisher "Hss2019"
 #define MyAppExeName "cmclaw.exe"
 #define MySourceDir "..\dist\cmclaw"
+#define MyIconFile "..\scripts\cmclaw.ico"
 
 [Setup]
 AppId={{7F5D6B5F-76D1-4C46-A6CC-61A5C7C6B123}
@@ -22,6 +23,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\{#MyAppExeName}
+#ifexist "{#MyIconFile}"
+SetupIconFile={#MyIconFile}
+#endif
 
 [Languages]
 #ifexist "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"

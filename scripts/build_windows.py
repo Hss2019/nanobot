@@ -16,6 +16,40 @@ ENTRY = ROOT / "nanobot" / "__main__.py"
 STATIC = ROOT / "nanobot" / "webui" / "static"
 TEMPLATES = ROOT / "nanobot" / "templates"
 SKILLS = ROOT / "nanobot" / "skills"
+ICON_PNG = STATIC / "cmclaw.png"
+ICON_ICO = ROOT / "scripts" / "cmclaw.ico"
+
+
+def _ensure_windows_icon() -> Path | None:
+    """Create a Windows .ico from the bundled PNG when Pillow is available."""
+    if not ICON_PNG.exists():
+        return None
+    try:
+        from PIL import Image
+
+        img = Image.open(ICON_PNG).convert("RGBA")
+        sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+        img.save(ICON_ICO, format="ICO", sizes=sizes)
+        return ICON_ICO
+    except Exception as exc:
+        print(f"Warning: failed to generate icon: {exc}")
+        return None
+
+
+def _run_smoke_test(exe_path: Path) -> None:
+    """Fail fast on missing hidden imports before producing an installer."""
+    print("\n运行构建后自检 ...")
+    tests = [
+        [str(exe_path), "desktop", "--help"],
+        [str(exe_path), "status"],
+    ]
+    for cmd in tests:
+        print(" ".join(cmd))
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(result.stdout)
+            print(result.stderr)
+            raise subprocess.CalledProcessError(result.returncode, cmd)
 
 cmd = [
     sys.executable, "-m", "PyInstaller",
@@ -30,6 +64,10 @@ if TEMPLATES.exists():
     cmd += ["--add-data", f"{TEMPLATES};nanobot/templates"]
 if SKILLS.exists():
     cmd += ["--add-data", f"{SKILLS};nanobot/skills"]
+
+icon_path = _ensure_windows_icon()
+if icon_path:
+    cmd += ["--icon", str(icon_path)]
 
 try:
     import litellm
@@ -77,5 +115,6 @@ cmd += [
 print("正在构建 cmclaw.exe ...")
 print(" ".join(cmd))
 subprocess.run(cmd, check=True)
+_run_smoke_test(ROOT / "dist" / "cmclaw" / "cmclaw.exe")
 print("\n完成！输出路径: dist/cmclaw/cmclaw.exe")
 print("运行: dist\\cmclaw\\cmclaw.exe desktop")
