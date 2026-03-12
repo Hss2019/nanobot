@@ -96,21 +96,34 @@ def create_app(
 
     @app.websocket("/ws")
     async def websocket_chat(ws: WebSocket):
-        await ws.accept()
         chat_id = f"web_{uuid.uuid4().hex[:8]}"
-        await web_channel.register_ws(chat_id, ws)
         try:
-            # Load existing session history for this chat
-            session_key = f"web:{chat_id}"
-            session = session_manager.get_or_create(session_key)
+            await ws.accept()
+        except Exception as e:
+            logger.error("WebSocket accept failed: {}", e)
+            return
+
+        try:
+            await web_channel.register_ws(chat_id, ws)
+        except Exception as e:
+            logger.error("WebSocket register failed for {}: {}", chat_id, e)
+            return
+
+        try:
+            # Load existing session history (defensive)
             history_msgs = []
-            for m in session.messages:
-                role = m.get("role", "")
-                content = m.get("content", "")
-                if role == "user":
-                    history_msgs.append({"type": "history_user", "content": content})
-                elif role == "assistant" and content:
-                    history_msgs.append({"type": "history_bot", "content": content})
+            try:
+                session_key = f"web:{chat_id}"
+                session = session_manager.get_or_create(session_key)
+                for m in session.messages:
+                    role = m.get("role", "")
+                    content = m.get("content", "")
+                    if role == "user":
+                        history_msgs.append({"type": "history_user", "content": content})
+                    elif role == "assistant" and content:
+                        history_msgs.append({"type": "history_bot", "content": content})
+            except Exception as e:
+                logger.warning("Failed to load session history: {}", e)
 
             await ws.send_text(json.dumps({
                 "type": "connected", "chat_id": chat_id,
@@ -118,6 +131,9 @@ def create_app(
                 "has_key": bool(config.get_api_key()),
                 "history": history_msgs,
             }, ensure_ascii=False))
+
+            logger.info("WebSocket ready: {}", chat_id)
+
             while True:
                 raw = await ws.receive_text()
                 try:
@@ -134,9 +150,9 @@ def create_app(
                     sender_id="web_user", chat_id=chat_id, content=content,
                 )
         except WebSocketDisconnect:
-            pass
+            logger.info("WebSocket disconnected: {}", chat_id)
         except Exception as e:
-            logger.debug("WebSocket error: {}", e)
+            logger.error("WebSocket error for {}: {}", chat_id, e)
         finally:
             await web_channel.unregister_ws(chat_id)
 

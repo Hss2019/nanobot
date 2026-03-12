@@ -35,7 +35,7 @@ def start_desktop(
         app,
         host=host,
         port=port,
-        log_level="warning",
+        log_level="info",
         loop="asyncio",
     )
     server = uvicorn.Server(server_config)

@@ -23,7 +23,14 @@ class WebChannel(BaseChannel):
         super().__init__(config, bus)
         # chat_id -> WebSocket object (from starlette)
         self._connections: dict[str, Any] = {}
-        self._lock = asyncio.Lock()
+        # Lock is created lazily to avoid event-loop mismatch between threads
+        self._lock: asyncio.Lock | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Get or create the asyncio lock in the current event loop."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def start(self) -> None:
         """No-op: the FastAPI server handles the actual listening."""
@@ -41,11 +48,12 @@ class WebChannel(BaseChannel):
 
     async def send(self, msg: OutboundMessage) -> None:
         """Send a message to the WebSocket connection for the given chat_id."""
-        async with self._lock:
+        lock = self._get_lock()
+        async with lock:
             ws = self._connections.get(msg.chat_id)
         if not ws:
             # Broadcast to all connections if chat_id not found
-            async with self._lock:
+            async with lock:
                 targets = list(self._connections.items())
             for cid, w in targets:
                 await self._send_ws(w, msg, cid)
@@ -72,18 +80,21 @@ class WebChannel(BaseChannel):
             await ws.send_text(payload)
         except Exception as e:
             logger.debug("Web channel send failed for {}: {}", chat_id, e)
-            async with self._lock:
+            lock = self._get_lock()
+            async with lock:
                 self._connections.pop(chat_id, None)
 
     async def register_ws(self, chat_id: str, ws: Any) -> None:
         """Register a WebSocket connection for a chat_id."""
-        async with self._lock:
+        lock = self._get_lock()
+        async with lock:
             self._connections[chat_id] = ws
         logger.info("Web client connected: {}", chat_id)
 
     async def unregister_ws(self, chat_id: str) -> None:
         """Unregister a WebSocket connection."""
-        async with self._lock:
+        lock = self._get_lock()
+        async with lock:
             self._connections.pop(chat_id, None)
         logger.info("Web client disconnected: {}", chat_id)
 
