@@ -17,7 +17,7 @@ def start_desktop(
     app: object,
     host: str = "127.0.0.1",
     port: int = 18791,
-    title: str = "Nanobot",
+    title: str = "CMClaw",
 ) -> None:
     """Launch the desktop application.
 
@@ -111,7 +111,7 @@ def start_desktop(
                 img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
                 draw.ellipse([4, 4, 60, 60], fill=(233, 69, 96, 255))
-                draw.text((20, 18), "N", fill=(255, 255, 255, 255))
+                draw.text((16, 18), "C", fill=(255, 255, 255, 255))
                 return img
 
             def _show():
@@ -120,11 +120,11 @@ def start_desktop(
                     _window.restore()
 
             menu = pystray.Menu(
-                pystray.MenuItem("Open Nanobot", lambda: _show(), default=True),
+                pystray.MenuItem("打开 CMClaw", lambda: _show(), default=True),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Quit", lambda: _shutdown()),
+                pystray.MenuItem("退出", lambda: _shutdown()),
             )
-            _tray = pystray.Icon("nanobot", _create_icon(), "Nanobot", menu)
+            _tray = pystray.Icon("cmclaw", _create_icon(), "CMClaw", menu)
             threading.Thread(target=_tray.run, daemon=True, name="tray").start()
             logger.info("System tray icon active")
         except ImportError:

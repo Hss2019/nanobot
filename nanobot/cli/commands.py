@@ -536,7 +536,7 @@ def desktop(
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
 ):
-    """Start nanobot as a desktop application with system tray."""
+    """启动 CMClaw 桌面应用（原生窗口 + 系统托盘）。"""
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
     from nanobot.channels.web import WebChannel
@@ -553,7 +553,7 @@ def desktop(
     host = web_cfg.host
     port = port if port is not None else web_cfg.port
 
-    console.print(f"{__logo__} Starting nanobot desktop on {host}:{port}...")
+    console.print(f"{__logo__} 正在启动 CMClaw 桌面应用 {host}:{port}...")
 
     bus = MessageBus()
     session_manager = SessionManager(config.workspace_path)
@@ -596,8 +596,8 @@ def desktop(
     if has_key:
         console.print(f"[green]✓[/green] Model: {config.agents.defaults.model}")
     else:
-        console.print("[yellow]![/yellow] No API key configured — set one in the Settings panel")
-    console.print(f"[green]✓[/green] Desktop UI: http://{host}:{port}")
+        console.print("[yellow]![/yellow] 未配置 API Key — 请在设置面板中配置")
+    console.print(f"[green]✓[/green] CMClaw 界面: http://{host}:{port}")
 
     # Launch desktop (pywebview + pystray + uvicorn)
     from nanobot.desktop.app import start_desktop

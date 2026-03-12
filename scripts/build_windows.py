@@ -1,10 +1,10 @@
-"""PyInstaller build script for Nanobot Desktop on Windows.
+"""PyInstaller build script for CMClaw Desktop on Windows.
 
 Usage (run on Windows):
     pip install nanobot-ai[desktop] pyinstaller
     python scripts/build_windows.py
 
-Output: dist/nanobot/ directory containing nanobot.exe
+Output: dist/cmclaw/ directory containing cmclaw.exe
 """
 
 import subprocess
@@ -19,7 +19,7 @@ SKILLS = ROOT / "nanobot" / "skills"
 
 cmd = [
     sys.executable, "-m", "PyInstaller",
-    "--name", "nanobot",
+    "--name", "cmclaw",
     "--noconfirm",
     # Include static web UI files
     "--add-data", f"{STATIC};nanobot/webui/static",
@@ -58,8 +58,8 @@ cmd += [
     str(ENTRY),
 ]
 
-print("Building nanobot.exe ...")
+print("正在构建 cmclaw.exe ...")
 print(" ".join(cmd))
 subprocess.run(cmd, check=True)
-print("\nDone! Output at: dist/nanobot/nanobot.exe")
-print("Run: dist\\nanobot\\nanobot.exe desktop")
+print("\n完成！输出路径: dist/cmclaw/cmclaw.exe")
+print("运行: dist\\cmclaw\\cmclaw.exe desktop")
