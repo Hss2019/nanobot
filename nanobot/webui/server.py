@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -29,8 +31,6 @@ def create_app(
     session_manager: SessionManager,
 ) -> Any:
     """Build and return the FastAPI application."""
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-    from fastapi.responses import FileResponse, JSONResponse
 
     agent_task: asyncio.Task | None = None
     dispatcher_task: asyncio.Task | None = None
@@ -76,9 +76,8 @@ def create_app(
     app = FastAPI(title="CMClaw Desktop", lifespan=lifespan)
 
     # CORS: allow all origins (local desktop app, safe to be permissive).
-    # Note: WebSocket origin checking is handled at the protocol level by
-    # switching from 'websockets' to 'wsproto' in uvicorn config (see
-    # desktop/app.py). ASGI middleware cannot intercept protocol-level 403s.
+    # WebSocket upgrades are handled outside HTTP CORS middleware, so
+    # desktop/app.py prefers wsproto for steadier embedded-webview behavior.
     from starlette.middleware.cors import CORSMiddleware
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
