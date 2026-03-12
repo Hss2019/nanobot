@@ -42,6 +42,17 @@ def _show_windows_error(trace: str, log_path: Path | None) -> None:
         pass
 
 
+def _safe_stderr_print(*parts: object) -> None:
+    """Best-effort stderr/stdout print that tolerates windowed mode streams being absent."""
+    stream = getattr(sys, "stderr", None) or getattr(sys, "stdout", None)
+    if stream is None:
+        return
+    try:
+        print(*parts, file=stream)
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     try:
         app()
@@ -52,18 +63,18 @@ if __name__ == "__main__":
         else:
             trace = traceback.format_exc()
             log_path = _write_crash_log(trace)
-            print("\nCMClaw startup failed.\n", file=sys.stderr)
-            print(trace, file=sys.stderr)
+            _safe_stderr_print("\nCMClaw startup failed.\n")
+            _safe_stderr_print(trace)
             if log_path:
-                print(f"Crash log saved to: {log_path}", file=sys.stderr)
+                _safe_stderr_print(f"Crash log saved to: {log_path}")
             _show_windows_error(trace, log_path)
             raise
     except Exception:
         trace = traceback.format_exc()
         log_path = _write_crash_log(trace)
-        print("\nCMClaw startup failed.\n", file=sys.stderr)
-        print(trace, file=sys.stderr)
+        _safe_stderr_print("\nCMClaw startup failed.\n")
+        _safe_stderr_print(trace)
         if log_path:
-            print(f"Crash log saved to: {log_path}", file=sys.stderr)
+            _safe_stderr_print(f"Crash log saved to: {log_path}")
         _show_windows_error(trace, log_path)
         raise
