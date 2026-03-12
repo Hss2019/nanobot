@@ -36,8 +36,11 @@ try:
 
     litellm_dir = Path(litellm.__file__).resolve().parent
     backup_map = litellm_dir / "model_prices_and_context_window_backup.json"
+    tokenizers_dir = litellm_dir / "litellm_core_utils" / "tokenizers"
     if backup_map.exists():
         cmd += ["--add-data", f"{backup_map};litellm"]
+    if tokenizers_dir.exists():
+        cmd += ["--add-data", f"{tokenizers_dir};litellm/litellm_core_utils/tokenizers"]
 except Exception:
     pass
 
@@ -63,6 +66,9 @@ cmd += [
     "--hidden-import", "pystray",
     "--hidden-import", "tiktoken_ext.openai_public",
     "--hidden-import", "tiktoken_ext",
+    "--hidden-import", "litellm.litellm_core_utils",
+    "--hidden-import", "litellm.litellm_core_utils.tokenizers",
+    "--collect-submodules", "litellm.litellm_core_utils",
     # Console mode (shows logs; use --windowed for no console)
     "--console",
     str(ENTRY),
