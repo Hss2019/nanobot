@@ -100,10 +100,23 @@ def create_app(
         chat_id = f"web_{uuid.uuid4().hex[:8]}"
         await web_channel.register_ws(chat_id, ws)
         try:
+            # Load existing session history for this chat
+            session_key = f"web:{chat_id}"
+            session = session_manager.get_or_create(session_key)
+            history_msgs = []
+            for m in session.messages:
+                role = m.get("role", "")
+                content = m.get("content", "")
+                if role == "user":
+                    history_msgs.append({"type": "history_user", "content": content})
+                elif role == "assistant" and content:
+                    history_msgs.append({"type": "history_bot", "content": content})
+
             await ws.send_text(json.dumps({
                 "type": "connected", "chat_id": chat_id,
                 "model": config.agents.defaults.model,
                 "has_key": bool(config.get_api_key()),
+                "history": history_msgs,
             }, ensure_ascii=False))
             while True:
                 raw = await ws.receive_text()
@@ -173,7 +186,49 @@ def create_app(
 
     @app.get("/api/sessions")
     async def list_sessions():
-        return JSONResponse(session_manager.list_sessions())
+        raw = session_manager.list_sessions()
+        # Enrich with message count
+        for s in raw:
+            path = s.get("path")
+            if path:
+                try:
+                    count = 0
+                    with open(path, encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            data = json.loads(line)
+                            if data.get("_type") != "metadata":
+                                count += 1
+                    s["messages"] = count
+                except Exception:
+                    s["messages"] = 0
+        return JSONResponse(raw)
+
+    @app.delete("/api/sessions/{key:path}")
+    async def delete_session(key: str):
+        session_manager.invalidate(key)
+        from nanobot.utils.helpers import safe_filename
+        safe_key = safe_filename(key.replace(":", "_"))
+        path = session_manager.sessions_dir / f"{safe_key}.jsonl"
+        if path.exists():
+            path.unlink()
+            return JSONResponse({"status": "ok", "message": f"会话 {key} 已删除"})
+        return JSONResponse({"status": "error", "message": "会话不存在"}, status_code=404)
+
+    # ── Session History API ──
+
+    @app.get("/api/sessions/{key:path}/history")
+    async def get_session_history(key: str):
+        session = session_manager.get_or_create(key)
+        messages = []
+        for m in session.messages:
+            role = m.get("role", "")
+            content = m.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+        return JSONResponse({"key": key, "messages": messages})
 
     # ── Skills API ──
 
@@ -211,6 +266,30 @@ def create_app(
             "status": cron_svc.status(),
         })
 
+    @app.post("/api/cron/{job_id}/toggle")
+    async def toggle_cron(job_id: str):
+        cron_svc = getattr(agent, '_cron_service', None) or getattr(agent, 'cron_service', None)
+        if not cron_svc:
+            return JSONResponse({"status": "error", "message": "Cron 服务不可用"}, status_code=404)
+        jobs = cron_svc.list_jobs(include_disabled=True)
+        target = next((j for j in jobs if j.id == job_id), None)
+        if not target:
+            return JSONResponse({"status": "error", "message": "任务不存在"}, status_code=404)
+        new_state = not target.enabled
+        result = cron_svc.enable_job(job_id, new_state)
+        if result:
+            return JSONResponse({"status": "ok", "enabled": new_state})
+        return JSONResponse({"status": "error", "message": "操作失败"}, status_code=500)
+
+    @app.delete("/api/cron/{job_id}")
+    async def delete_cron(job_id: str):
+        cron_svc = getattr(agent, '_cron_service', None) or getattr(agent, 'cron_service', None)
+        if not cron_svc:
+            return JSONResponse({"status": "error", "message": "Cron 服务不可用"}, status_code=404)
+        if cron_svc.remove_job(job_id):
+            return JSONResponse({"status": "ok", "message": "任务已删除"})
+        return JSONResponse({"status": "error", "message": "任务不存在"}, status_code=404)
+
     # ── Memory API ──
 
     @app.get("/api/memory")
@@ -221,6 +300,14 @@ def create_app(
         memory = memory_file.read_text(encoding="utf-8") if memory_file.exists() else ""
         history = history_file.read_text(encoding="utf-8") if history_file.exists() else ""
         return JSONResponse({"memory": memory, "history": history})
+
+    @app.post("/api/memory")
+    async def save_memory(payload: dict[str, Any]):
+        ws = config.workspace_path
+        content = payload.get("memory", "")
+        memory_file = ws / "MEMORY.md"
+        memory_file.write_text(content, encoding="utf-8")
+        return JSONResponse({"status": "ok", "message": "记忆已保存"})
 
     # ── Tools API ──
 

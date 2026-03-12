@@ -135,6 +135,10 @@ tr:hover td{background:var(--accent-dim)}
 .welcome h2{font-size:18px;font-weight:600;background:linear-gradient(135deg,#3C87FB,#5a9bff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .welcome p{color:var(--text-dim);font-size:13px;max-width:340px;text-align:center;line-height:1.6}
 
+.msg.error{align-self:flex-start;color:var(--red);font-size:12px;background:rgba(248,113,113,.08);padding:8px 14px;border-left:2px solid var(--red);border-radius:4px}
+.btn-danger{background:none;border:1px solid var(--red);color:var(--red);box-shadow:none;padding:3px 10px;font-size:11px;border-radius:4px;cursor:pointer;transition:all .15s}
+.btn-danger:hover{background:rgba(248,113,113,.12)}
+
 /* Empty / scroll */
 .empty{color:var(--text-dim);text-align:center;padding:40px;font-size:13px}
 </style>
@@ -229,7 +233,13 @@ tr:hover td{background:var(--accent-dim)}
   <!-- Memory -->
   <div class="panel" id="memoryPanel">
     <div class="page-pad">
-      <div class="card"><h3>长期记忆 (MEMORY.md)</h3><pre id="memoryContent" style="white-space:pre-wrap;font-size:13px;max-height:300px;overflow-y:auto;color:var(--text);line-height:1.6"></pre></div>
+      <div class="card"><h3>长期记忆 (MEMORY.md)</h3>
+        <textarea id="memoryContent" style="width:100%;min-height:200px;max-height:350px;background:var(--shell-bg);border:1px solid var(--border);color:var(--text);padding:12px;border-radius:var(--radius-sm);font-size:13px;font-family:inherit;resize:vertical;outline:none;line-height:1.6"></textarea>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
+          <button class="btn btn-sm" onclick="saveMemory()">保存记忆</button>
+          <span class="save-msg" id="memorySaveMsg"></span>
+        </div>
+      </div>
       <div class="card"><h3>历史日志 (HISTORY.md)</h3><pre id="historyContent" style="white-space:pre-wrap;font-size:12px;max-height:400px;overflow-y:auto;color:var(--text-muted);line-height:1.6"></pre></div>
     </div>
   </div>
@@ -335,9 +345,27 @@ function connect(){
 function setConn(ok){const c=document.getElementById('connChip');c.textContent=ok?'已连接':'已断开';c.className='chip '+(ok?'ok':'off')}
 function handle(d){
   const box=document.getElementById('messages');
-  if(d.type==='connected'){chatId=d.chat_id;document.getElementById('footerModel').textContent=d.model||'--';document.getElementById('noKeyBar').style.display=d.has_key?'none':'';return}
+  if(d.type==='connected'){
+    chatId=d.chat_id;
+    document.getElementById('footerModel').textContent=d.model||'--';
+    document.getElementById('noKeyBar').style.display=d.has_key?'none':'';
+    // Restore chat history
+    if(d.history&&d.history.length>0){
+      showMessages();
+      for(const m of d.history){
+        const e=document.createElement('div');
+        if(m.type==='history_user'){e.className='msg user';e.textContent=m.content}
+        else{e.className='msg bot';e.innerHTML=marked.parse(m.content||'')}
+        e.style.animation='none';
+        box.appendChild(e);
+      }
+      scrollB();
+    }
+    return;
+  }
   if(d.type==='progress'){showMessages();if(!progEl){progEl=document.createElement('div');progEl.className='msg progress';box.appendChild(progEl)}progEl.textContent=d.content||'思考中...';scrollB();return}
   if(d.type==='tool_hint'){showMessages();const e=document.createElement('div');e.className='msg tool-hint';e.textContent=d.content;box.appendChild(e);scrollB();return}
+  if(d.type==='error'){showMessages();if(progEl){progEl.remove();progEl=null}const e=document.createElement('div');e.className='msg error';e.textContent=d.content||'发生错误';box.appendChild(e);scrollB();waiting=false;updBtn();return}
   if(d.type==='response'){showMessages();if(progEl){progEl.remove();progEl=null}const e=document.createElement('div');e.className='msg bot';e.innerHTML=marked.parse(d.content||'(空回复)');box.appendChild(e);scrollB();waiting=false;updBtn()}
 }
 function sendMsg(){const t=document.getElementById('input'),v=t.value.trim();if(!v||!ws||ws.readyState!==1)return;showMessages();const box=document.getElementById('messages'),e=document.createElement('div');e.className='msg user';e.textContent=v;box.appendChild(e);scrollB();ws.send(JSON.stringify({type:'message',content:v}));t.value='';autoH(t);waiting=true;updBtn()}
@@ -363,29 +391,48 @@ async function loadOverview(){
   }catch(e){document.getElementById('overviewStats').innerHTML='<div class="empty">加载失败</div>'}
 }
 
-// ── Sessions ──
+// ── Sessions (with message count + delete) ──
 async function loadSessions(){
   const c=document.getElementById('sessionTable');
   try{
     const list=await(await fetch('/api/sessions')).json();
     if(!list.length){c.innerHTML='<div class="empty">暂无会话，开始对话即可创建</div>';return}
-    c.innerHTML='<table><tr><th>会话 Key</th><th>消息数</th><th>最后更新</th></tr>'+list.map(s=>`<tr><td style="font-family:monospace;font-size:12px">${s.key||''}</td><td>${s.messages||0}</td><td>${s.updated_at||''}</td></tr>`).join('')+'</table>';
+    c.innerHTML='<table><tr><th>会话 Key</th><th>消息数</th><th>最后更新</th><th>操作</th></tr>'+list.map(s=>{
+      const key=s.key||'';
+      const ek=key.replace(/'/g,"\\'");
+      return `<tr><td style="font-family:monospace;font-size:12px">${key}</td><td>${s.messages??'--'}</td><td>${s.updated_at||''}</td><td><button class="btn-danger" onclick="delSession('${ek}')">删除</button></td></tr>`;
+    }).join('')+'</table>';
   }catch(e){c.innerHTML='<div class="empty">加载失败</div>'}
 }
+async function delSession(key){
+  if(!confirm('确定删除会话 '+key+' ？此操作不可撤销。'))return;
+  try{
+    await fetch('/api/sessions/'+encodeURIComponent(key),{method:'DELETE'});
+    loadSessions();
+  }catch(e){alert('删除失败: '+e.message)}
+}
 
-// ── Cron ──
+// ── Cron (with toggle + delete) ──
 async function loadCron(){
   const c=document.getElementById('cronTable');
   try{
     const d=await(await fetch('/api/cron')).json();
     if(!d.jobs||!d.jobs.length){c.innerHTML='<div class="empty">暂无定时任务。可通过对话让 AI 创建</div>';return}
-    c.innerHTML='<table><tr><th>名称</th><th>调度</th><th>状态</th><th>上次执行</th></tr>'+d.jobs.map(j=>{
+    c.innerHTML='<table><tr><th>名称</th><th>调度</th><th>状态</th><th>上次执行</th><th>操作</th></tr>'+d.jobs.map(j=>{
       const sched=j.schedule.kind==='every'?`每 ${Math.round((j.schedule.every_ms||0)/1000)}s`:j.schedule.kind==='cron'?j.schedule.expr:new Date(j.schedule.at_ms||0).toLocaleString('zh-CN');
       const st=j.enabled?'<span class="tag green">启用</span>':'<span class="tag red">停用</span>';
       const last=j.state.last_status?`<span class="tag ${j.state.last_status==='ok'?'green':'red'}">${j.state.last_status}</span>`:'--';
-      return `<tr><td>${j.name}</td><td style="font-family:monospace;font-size:12px">${sched}</td><td>${st}</td><td>${last}</td></tr>`;
+      const toggleTxt=j.enabled?'停用':'启用';
+      return `<tr><td>${j.name}</td><td style="font-family:monospace;font-size:12px">${sched}</td><td>${st}</td><td>${last}</td><td><button class="btn btn-sm btn-outline" onclick="toggleCron('${j.id}')" style="margin-right:4px">${toggleTxt}</button><button class="btn-danger" onclick="delCron('${j.id}')">删除</button></td></tr>`;
     }).join('')+'</table>';
   }catch(e){c.innerHTML='<div class="empty">加载失败</div>'}
+}
+async function toggleCron(id){
+  try{await fetch('/api/cron/'+id+'/toggle',{method:'POST'});loadCron()}catch(e){alert('操作失败: '+e.message)}
+}
+async function delCron(id){
+  if(!confirm('确定删除此定时任务？'))return;
+  try{await fetch('/api/cron/'+id,{method:'DELETE'});loadCron()}catch(e){alert('删除失败: '+e.message)}
 }
 
 // ── Skills ──
@@ -413,13 +460,20 @@ async function loadTools(){
   }catch(e){c.innerHTML='<div class="empty">加载失败</div>'}
 }
 
-// ── Memory ──
+// ── Memory (editable + save) ──
 async function loadMemory(){
   try{
     const d=await(await fetch('/api/memory')).json();
-    document.getElementById('memoryContent').textContent=d.memory||'(空)';
+    document.getElementById('memoryContent').value=d.memory||'';
     document.getElementById('historyContent').textContent=d.history||'(空)';
   }catch(e){}
+}
+async function saveMemory(){
+  const content=document.getElementById('memoryContent').value;
+  try{
+    await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memory:content})});
+    const m=document.getElementById('memorySaveMsg');m.textContent='记忆已保存';setTimeout(()=>m.textContent='',4e3);
+  }catch(e){alert('保存失败: '+e.message)}
 }
 
 // ── Settings ──
