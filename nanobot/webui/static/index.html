@@ -364,7 +364,7 @@ function toggleTheme(){const l=document.documentElement.getAttribute('data-theme
 (function(){if(localStorage.getItem('cmclaw_theme')==='light'){document.documentElement.setAttribute('data-theme','light');document.getElementById('themeBtn').textContent='深色'}})();
 
 // ── WebSocket ──
-let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false,selectedSessionKey=null;
+let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false,selectedSessionKey=null,currentExecMode='approval';
 function showMessages(){if(!hasMessages){hasMessages=true;document.getElementById('welcomeBox').style.display='none';document.getElementById('messages').style.display='flex'}}
 function resetChatView(){
   document.getElementById('messages').innerHTML='';
@@ -384,8 +384,12 @@ function formatExecModeLabel(mode){
   return mode==='chat'?'仅对话':mode==='auto'?'自动执行':'审批后执行';
 }
 function renderExecMode(mode){
+  currentExecMode=mode||currentExecMode;
   document.querySelectorAll('.mode-pill').forEach(btn=>btn.classList.toggle('active',btn.dataset.mode===mode));
   document.getElementById('execModeHint').textContent=`当前模式：${formatExecModeLabel(mode)}`;
+}
+function setExecModeBusy(busy){
+  document.querySelectorAll('.mode-pill').forEach(btn=>btn.disabled=busy);
 }
 function applyRuntimeStatus(d){
   document.getElementById('footerModel').textContent=formatFooterModel(d.model,d.provider);
@@ -431,8 +435,14 @@ function escapeHtml(s){
   return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 }
 async function setExecMode(mode){
+  if(mode===currentExecMode)return;
+  const prevMode=currentExecMode;
+  setExecModeBusy(true);
+  renderExecMode(mode);
+  document.getElementById('execModeHint').textContent=`正在切换到：${formatExecModeLabel(mode)}`;
   try{
     const res=await fetch('/api/runtime/exec-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode})});
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
     if(data.runtime)applyRuntimeStatus(data.runtime);
     const m=document.getElementById('saveMsg');
@@ -440,7 +450,12 @@ async function setExecMode(mode){
       m.textContent=data.message||'已更新';
       setTimeout(()=>m.textContent='',3000);
     }
-  }catch(e){alert('更新命令模式失败: '+e.message)}
+  }catch(e){
+    renderExecMode(prevMode);
+    alert('更新命令模式失败: '+e.message);
+  }finally{
+    setExecModeBusy(false);
+  }
 }
 function connect(){
   const p=location.protocol==='https:'?'wss:':'ws:';
