@@ -75,43 +75,12 @@ def create_app(
 
     app = FastAPI(title="CMClaw Desktop", lifespan=lifespan)
 
-    # ── Origin / CORS handling for WebSocket ──
-    # pywebview's embedded browser may send an unexpected Origin header
-    # (e.g. "null", "http://localhost:port", or a custom scheme), causing
-    # Starlette/uvicorn to reject the WebSocket upgrade with 403.
-    #
-    # Strategy:
-    # 1. A thin ASGI middleware that strips/normalises the Origin header for
-    #    WebSocket upgrade requests so Starlette never rejects them.
-    # 2. Standard CORSMiddleware for regular HTTP requests.
-
+    # CORS: allow all origins (local desktop app, safe to be permissive).
+    # Note: WebSocket origin checking is handled at the protocol level by
+    # switching from 'websockets' to 'wsproto' in uvicorn config (see
+    # desktop/app.py). ASGI middleware cannot intercept protocol-level 403s.
     from starlette.middleware.cors import CORSMiddleware
-    from starlette.types import ASGIApp, Receive, Scope, Send
-
-    class _AllowWebSocketOrigin:
-        """ASGI middleware: ensure WebSocket upgrades are never blocked by origin checks."""
-        def __init__(self, app: ASGIApp) -> None:
-            self.app = app
-
-        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-            if scope["type"] == "websocket":
-                # Rewrite headers so that Origin matches the Host, preventing 403
-                headers = dict(scope.get("headers", []))
-                host = headers.get(b"host", b"127.0.0.1")
-                new_headers = []
-                for k, v in scope.get("headers", []):
-                    if k == b"origin":
-                        # Replace origin with the server's own host
-                        v = b"http://" + host
-                    new_headers.append((k, v))
-                scope = dict(scope, headers=new_headers)
-            await self.app(scope, receive, send)
-
-    # Order matters: outermost middleware runs first.
-    # _AllowWebSocketOrigin must wrap everything so it fixes headers
-    # before CORSMiddleware or Starlette sees them.
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-    app.add_middleware(_AllowWebSocketOrigin)  # outermost — runs first
 
     # ── Static ──
 

@@ -37,6 +37,12 @@ def start_desktop(
         port=port,
         log_level="info",
         loop="asyncio",
+        # Use wsproto instead of websockets for WebSocket protocol.
+        # The default 'websockets' library rejects connections with
+        # mismatched Origin headers (403) at the protocol level —
+        # before any ASGI middleware runs — which breaks pywebview's
+        # embedded browser. wsproto has no such restriction.
+        ws="wsproto",
     )
     server = uvicorn.Server(server_config)
 
