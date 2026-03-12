@@ -86,6 +86,41 @@
 
 ---
 
+## 2026-03-12 会话 3 — WebSocket 403 修复
+
+**操作者**: Claude Opus 4.6 + 用户 Hss
+
+### 问题
+
+用户在 Windows 上测试 `nanobot desktop`，WebSocket 始终返回 **403 Forbidden**：
+```
+INFO:     127.0.0.1:9162 - "WebSocket /ws" 403
+INFO:     connection rejected (403 Forbidden)
+```
+代码根本没执行到 `ws.accept()`，说明是 Starlette/uvicorn 层面在握手阶段就拒绝了。
+
+### 根因
+
+pywebview 内嵌浏览器（Windows 上是 EdgeChromium）发送的 WebSocket 请求
+携带了 Starlette 不认可的 Origin 头（可能是 `null`、`http://localhost:18791`
+而服务端绑定在 `127.0.0.1:18791`，或其他非标准值）。
+Starlette 0.40+ / FastAPI 0.115+ 对 WebSocket 有 Origin 校验，不匹配时返回 403。
+
+### 修复
+
+`nanobot/webui/server.py` 新增两层中间件：
+
+1. **`_AllowWebSocketOrigin`** (自定义 ASGI 中间件，最外层)
+   - 拦截 `scope["type"] == "websocket"` 的请求
+   - 将 Origin 头重写为 `http://{Host}`，使其与服务端一致
+   - 在 Starlette 任何校验逻辑之前执行
+
+2. **`CORSMiddleware`** (标准 Starlette 中间件)
+   - `allow_origins=["*"]` 放行所有来源的 HTTP 请求
+   - 作为保底，处理 preflight 和常规 CORS
+
+---
+
 ## 当前状态
 
 ### 已完成
