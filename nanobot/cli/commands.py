@@ -9,12 +9,17 @@ from pathlib import Path
 
 # Force UTF-8 encoding for Windows console
 if sys.platform == "win32":
-    if sys.stdout.encoding != "utf-8":
+    stdout = getattr(sys, "stdout", None)
+    stderr = getattr(sys, "stderr", None)
+    stdout_encoding = getattr(stdout, "encoding", None)
+    if stdout_encoding and stdout_encoding.lower() != "utf-8":
         os.environ["PYTHONIOENCODING"] = "utf-8"
         # Re-open stdout/stderr with UTF-8 encoding
         try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+            if stdout and hasattr(stdout, "reconfigure"):
+                stdout.reconfigure(encoding="utf-8", errors="replace")
+            if stderr and hasattr(stderr, "reconfigure"):
+                stderr.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 
