@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from typing import Any
 
 from loguru import logger
@@ -25,6 +26,7 @@ class WebChannel(BaseChannel):
         self._connections: dict[str, Any] = {}
         # Lock is created lazily to avoid event-loop mismatch between threads
         self._lock: asyncio.Lock | None = None
+        self._pending_exec_approvals: dict[str, tuple[str, asyncio.Future[bool]]] = {}
 
     def _get_lock(self) -> asyncio.Lock:
         """Get or create the asyncio lock in the current event loop."""
@@ -96,7 +98,65 @@ class WebChannel(BaseChannel):
         lock = self._get_lock()
         async with lock:
             self._connections.pop(chat_id, None)
+            stale = [
+                approval_id
+                for approval_id, (pending_chat_id, _) in self._pending_exec_approvals.items()
+                if pending_chat_id == chat_id
+            ]
+            for approval_id in stale:
+                _, future = self._pending_exec_approvals.pop(approval_id)
+                if not future.done():
+                    future.set_result(False)
         logger.info("Web client disconnected: {}", chat_id)
+
+    async def request_exec_approval(self, chat_id: str, command: str, timeout: float = 300.0) -> bool:
+        """Send an exec approval prompt to the web UI and wait for a decision."""
+        lock = self._get_lock()
+        async with lock:
+            ws = self._connections.get(chat_id)
+        if not ws:
+            logger.warning("Exec approval requested for disconnected chat {}", chat_id)
+            return False
+
+        approval_id = uuid.uuid4().hex[:10]
+        future: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+        async with lock:
+            self._pending_exec_approvals[approval_id] = (chat_id, future)
+
+        payload = json.dumps(
+            {
+                "type": "exec_approval",
+                "approval_id": approval_id,
+                "command": command,
+                "chat_id": chat_id,
+            },
+            ensure_ascii=False,
+        )
+        try:
+            await ws.send_text(payload)
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning("Exec approval timed out for {}", approval_id)
+            return False
+        except Exception as e:
+            logger.warning("Exec approval request failed for {}: {}", approval_id, e)
+            return False
+        finally:
+            async with lock:
+                self._pending_exec_approvals.pop(approval_id, None)
+
+    async def resolve_exec_approval(self, chat_id: str, approval_id: str, approved: bool) -> bool:
+        """Resolve a pending exec approval from the web UI."""
+        lock = self._get_lock()
+        async with lock:
+            pending = self._pending_exec_approvals.get(approval_id)
+        if not pending:
+            return False
+        pending_chat_id, future = pending
+        if pending_chat_id != chat_id or future.done():
+            return False
+        future.set_result(bool(approved))
+        return True
 
     @property
     def connected_clients(self) -> int:

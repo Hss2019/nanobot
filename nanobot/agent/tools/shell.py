@@ -20,6 +20,7 @@ class ExecTool(Tool):
         allow_patterns: list[str] | None = None,
         restrict_to_workspace: bool = False,
         path_append: str = "",
+        mode: str = "approval",
     ):
         self.timeout = timeout
         self.working_dir = working_dir
@@ -39,6 +40,10 @@ class ExecTool(Tool):
         self.allow_patterns = allow_patterns or []
         self.restrict_to_workspace = restrict_to_workspace
         self.path_append = path_append
+        self.mode = mode
+        self._channel = "cli"
+        self._chat_id = "direct"
+        self._approval_channel: Any = None
 
     @property
     def name(self) -> str:
@@ -50,6 +55,19 @@ class ExecTool(Tool):
     @property
     def description(self) -> str:
         return "Execute a shell command and return its output. Use with caution."
+
+    def set_context(self, channel: str, chat_id: str) -> None:
+        """Set the current message context for approval routing."""
+        self._channel = channel
+        self._chat_id = chat_id
+
+    def set_mode(self, mode: str) -> None:
+        """Update execution mode at runtime."""
+        self.mode = mode
+
+    def set_approval_channel(self, approval_channel: Any) -> None:
+        """Attach a channel object that can request exec approvals."""
+        self._approval_channel = approval_channel
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -82,6 +100,17 @@ class ExecTool(Tool):
         timeout: int | None = None, **kwargs: Any,
     ) -> str:
         cwd = working_dir or self.working_dir or os.getcwd()
+
+        if self.mode == "chat":
+            return "Error: Command execution is disabled in chat-only mode"
+
+        if self.mode == "approval":
+            if self._channel != "web" or self._approval_channel is None:
+                return "Error: Command approval mode is only available in the CMClaw desktop UI"
+            approved = await self._approval_channel.request_exec_approval(self._chat_id, command)
+            if not approved:
+                return "Error: Command execution was not approved"
+
         guard_error = self._guard_command(command, cwd)
         if guard_error:
             return guard_error
@@ -114,7 +143,7 @@ class ExecTool(Tool):
                     pass
                 return f"Error: Command timed out after {effective_timeout} seconds"
 
-            output_parts = []
+            output_parts = [f"Command: {command}"]
 
             if stdout:
                 output_parts.append(stdout.decode("utf-8", errors="replace"))

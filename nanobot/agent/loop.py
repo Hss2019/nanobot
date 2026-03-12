@@ -118,6 +118,7 @@ class AgentLoop:
             timeout=self.exec_config.timeout,
             restrict_to_workspace=self.restrict_to_workspace,
             path_append=self.exec_config.path_append,
+            mode=self.exec_config.mode,
         ))
         self.tools.register(WebSearchTool(api_key=self.brave_api_key, proxy=self.web_proxy))
         self.tools.register(WebFetchTool(proxy=self.web_proxy))
@@ -150,7 +151,7 @@ class AgentLoop:
 
     def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
         """Update context for all tools that need routing info."""
-        for name in ("message", "spawn", "cron"):
+        for name in ("message", "spawn", "cron", "exec"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
                     tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
@@ -170,7 +171,7 @@ class AgentLoop:
         if "model" in lower and "not supported" in lower:
             return (
                 f"当前模型 `{self.model}` 在当前 Provider 配置下不可用。\n"
-                "请到设置面板检查 Provider 和模型是否匹配，保存后重启 CMClaw。\n\n"
+                "请到设置面板检查 Provider 和模型是否匹配，保存设置后立即重试。\n\n"
                 f"原始错误：{text}"
             )
         return text
@@ -180,11 +181,55 @@ class AgentLoop:
         """Format tool calls as concise hint, e.g. 'web_search("query")'."""
         def _fmt(tc):
             args = (tc.arguments[0] if isinstance(tc.arguments, list) else tc.arguments) or {}
+            if tc.name == "exec" and isinstance(args, dict):
+                command = str(args.get("command", "")).strip()
+                if command:
+                    return f"执行命令: {command[:120]}"
             val = next(iter(args.values()), None) if isinstance(args, dict) else None
             if not isinstance(val, str):
                 return tc.name
             return f'{tc.name}("{val[:40]}…")' if len(val) > 40 else f'{tc.name}("{val}")'
         return ", ".join(_fmt(tc) for tc in tool_calls)
+
+    def apply_runtime_config(self, config: "Any", provider: LLMProvider) -> None:
+        """Apply runtime-safe config changes without restarting the desktop app."""
+        self.channels_config = config.channels
+        self.provider = provider
+        self.model = config.agents.defaults.model
+        self.max_iterations = config.agents.defaults.max_tool_iterations
+        self.context_window_tokens = config.agents.defaults.context_window_tokens
+        self.brave_api_key = config.tools.web.search.api_key or None
+        self.web_proxy = config.tools.web.proxy or None
+        self.exec_config = config.tools.exec
+        self.restrict_to_workspace = config.tools.restrict_to_workspace
+
+        self.subagents.provider = provider
+        self.subagents.model = self.model
+        self.subagents.brave_api_key = self.brave_api_key
+        self.subagents.web_proxy = self.web_proxy
+        self.subagents.exec_config = self.exec_config
+        self.subagents.restrict_to_workspace = self.restrict_to_workspace
+
+        self.memory_consolidator.provider = provider
+        self.memory_consolidator.model = self.model
+        self.memory_consolidator.context_window_tokens = self.context_window_tokens
+
+        if exec_tool := self.tools.get("exec"):
+            if isinstance(exec_tool, ExecTool):
+                exec_tool.timeout = self.exec_config.timeout
+                exec_tool.path_append = self.exec_config.path_append
+                exec_tool.restrict_to_workspace = self.restrict_to_workspace
+                exec_tool.working_dir = str(self.workspace)
+                exec_tool.set_mode(self.exec_config.mode)
+
+        if search_tool := self.tools.get("web_search"):
+            if isinstance(search_tool, WebSearchTool):
+                search_tool._init_api_key = self.brave_api_key
+                search_tool.proxy = self.web_proxy
+
+        if fetch_tool := self.tools.get("web_fetch"):
+            if isinstance(fetch_tool, WebFetchTool):
+                fetch_tool.proxy = self.web_proxy
 
     async def _run_agent_loop(
         self,
@@ -387,7 +432,7 @@ class AgentLoop:
                                   content="New session started.")
         if cmd == "/help":
             return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
-                                  content="🐈 nanobot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands")
+                                  content="CMClaw commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands")
 
         await self.memory_consolidator.maybe_consolidate_by_tokens(session)
 

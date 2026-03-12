@@ -118,10 +118,20 @@ tr:hover td{background:var(--accent-dim)}
 .msg.bot code{font-size:12.5px}
 .msg.bot p{margin:4px 0}.msg.bot ul,.msg.bot ol{margin:4px 0 4px 18px}
 .msg.bot table{border-collapse:collapse;margin:8px 0}.msg.bot th,.msg.bot td{border:1px solid var(--border);padding:4px 8px;font-size:12px}
-.msg.progress{align-self:flex-start;color:var(--accent);font-size:12px;font-style:italic;background:none;padding:4px 16px}
-.msg.progress::before{content:'';display:inline-block;width:6px;height:6px;background:var(--accent);border-radius:50%;margin-right:8px;animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.msg.tool-hint{align-self:flex-start;color:var(--text-dim);font-size:11px;font-family:"SF Mono",Monaco,"Cascadia Code",Consolas,monospace;background:var(--accent-dim);padding:4px 12px;border-radius:4px;border-left:2px solid var(--accent)}
+.msg.progress{align-self:flex-start;min-width:280px;max-width:460px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(60,135,251,.10),rgba(60,135,251,.04));box-shadow:var(--shadow)}
+.progress-label{font-size:12px;color:var(--accent);margin-bottom:10px;font-weight:600}
+.progress-track{height:6px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;position:relative}
+.progress-fill{position:absolute;inset:0 auto 0 -35%;width:35%;border-radius:999px;background:linear-gradient(90deg,rgba(90,155,255,0),rgba(90,155,255,.95),rgba(90,155,255,0));animation:loadingBar 1.2s ease-in-out infinite}
+@keyframes loadingBar{0%{left:-35%}100%{left:100%}}
+.msg.tool-hint{align-self:flex-start;color:var(--text-dim);font-size:11px;font-family:"SF Mono",Monaco,"Cascadia Code",Consolas,monospace;background:var(--accent-dim);padding:6px 12px;border-radius:6px;border-left:2px solid var(--accent);white-space:pre-wrap}
+.msg.approval{align-self:flex-start;min-width:320px;max-width:560px;padding:14px 16px;border-radius:12px;border:1px solid rgba(251,191,36,.35);background:linear-gradient(180deg,rgba(251,191,36,.10),rgba(251,191,36,.04));box-shadow:var(--shadow)}
+.approval-title{font-size:12px;color:var(--amber);font-weight:700;margin-bottom:10px}
+.approval-command{font-family:"SF Mono",Monaco,"Cascadia Code",Consolas,monospace;font-size:12px;line-height:1.6;white-space:pre-wrap;padding:10px 12px;border-radius:8px;background:var(--shell-bg);border:1px solid var(--border);margin-bottom:12px}
+.approval-actions{display:flex;gap:8px}
+.approval-actions button{border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer}
+.approval-allow{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
+.approval-deny{background:rgba(248,113,113,.14);color:var(--red);border:1px solid rgba(248,113,113,.35)}
+.approval-note{font-size:11px;color:var(--text-dim)}
 .compose{display:flex;gap:10px;padding:14px 20px;background:var(--topbar-bg);border-top:1px solid var(--border);flex-shrink:0}
 .compose textarea{flex:1;background:var(--shell-bg);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius);font-size:13px;font-family:inherit;resize:none;outline:none;max-height:120px;line-height:1.5;transition:border-color .15s,box-shadow .15s}
 .compose textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
@@ -181,7 +191,7 @@ tr:hover td{background:var(--accent-dim)}
 
   <!-- Chat -->
   <div class="panel active" id="chatPanel">
-    <div class="no-key-bar" id="noKeyBar" style="display:none">尚未配置 API Key。<a onclick="go('settings')">前往设置</a> 添加后重启即可使用。</div>
+    <div class="no-key-bar" id="noKeyBar" style="display:none">尚未配置 API Key。<a onclick="go('settings')">前往设置</a> 保存后即可立即使用。</div>
     <div class="welcome" id="welcomeBox">
       <img src="/static/cmclaw.png" alt="CMClaw">
       <h2>欢迎使用 CMClaw</h2>
@@ -287,6 +297,13 @@ tr:hover td{background:var(--accent-dim)}
         </div>
         <div class="field-row">
           <div class="field"><label>Shell 超时 (秒)</label><input id="cfgTimeout" type="number" value="60"></div>
+          <div class="field"><label>命令执行模式</label>
+            <select id="cfgExecMode">
+              <option value="approval">审批后执行（默认）</option>
+              <option value="chat">仅对话，不执行命令</option>
+              <option value="auto">自动执行命令</option>
+            </select>
+          </div>
           <div class="field"><label>限制工具在工作区</label>
             <select id="cfgRestrict"><option value="false">否</option><option value="true">是</option></select>
           </div>
@@ -342,6 +359,51 @@ function formatProviderLabel(provider, configuredProvider){
 function formatFooterModel(model, provider){
   return provider ? `${model||'--'} · ${provider}` : (model||'--');
 }
+function formatExecModeLabel(mode){
+  return mode==='chat'?'仅对话':mode==='auto'?'自动执行':'审批后执行';
+}
+function applyRuntimeStatus(d){
+  document.getElementById('footerModel').textContent=formatFooterModel(d.model,d.provider);
+  document.getElementById('noKeyBar').style.display=d.has_key?'none':'';
+}
+function ensureProgress(content){
+  showMessages();
+  const box=document.getElementById('messages');
+  if(!progEl){
+    progEl=document.createElement('div');
+    progEl.className='msg progress';
+    progEl.innerHTML='<div class="progress-label"></div><div class="progress-track"><div class="progress-fill"></div></div>';
+    box.appendChild(progEl);
+  }
+  progEl.querySelector('.progress-label').textContent=content||'正在处理中...';
+  scrollB();
+}
+function clearProgress(){if(progEl){progEl.remove();progEl=null}}
+function renderApprovalRequest(d){
+  showMessages();
+  clearProgress();
+  const box=document.getElementById('messages');
+  const e=document.createElement('div');
+  e.className='msg approval';
+  e.dataset.approvalId=d.approval_id;
+  e.innerHTML=`<div class="approval-title">命令执行审批</div><div class="approval-command">${escapeHtml(d.command||'')}</div><div class="approval-actions"><button class="approval-allow" onclick="resolveApproval('${d.approval_id}', true, this)">批准执行</button><button class="approval-deny" onclick="resolveApproval('${d.approval_id}', false, this)">拒绝</button></div><div class="approval-note" style="margin-top:10px">当前为“审批后执行”模式。</div>`;
+  box.appendChild(e);
+  scrollB();
+}
+function resolveApproval(id, approved, btn){
+  if(!ws||ws.readyState!==1)return;
+  const card=btn.closest('.msg.approval');
+  if(card){
+    card.querySelectorAll('button').forEach(b=>b.disabled=true);
+    const note=card.querySelector('.approval-note');
+    note.textContent=approved?'已批准，正在执行命令...':'已拒绝，该命令不会执行。';
+  }
+  ws.send(JSON.stringify({type:'approval',approval_id:id,approved}));
+  if(approved)ensureProgress('命令已批准，正在执行...');
+}
+function escapeHtml(s){
+  return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
 function connect(){
   const p=location.protocol==='https:'?'wss:':'ws:';
   ws=new WebSocket(`${p}//${location.host}/ws`);
@@ -354,8 +416,7 @@ function handle(d){
   const box=document.getElementById('messages');
   if(d.type==='connected'){
     chatId=d.chat_id;
-    document.getElementById('footerModel').textContent=formatFooterModel(d.model,d.provider);
-    document.getElementById('noKeyBar').style.display=d.has_key?'none':'';
+    applyRuntimeStatus(d);
     // Restore chat history
     if(d.history&&d.history.length>0){
       showMessages();
@@ -370,12 +431,13 @@ function handle(d){
     }
     return;
   }
-  if(d.type==='progress'){showMessages();if(!progEl){progEl=document.createElement('div');progEl.className='msg progress';box.appendChild(progEl)}progEl.textContent=d.content||'思考中...';scrollB();return}
+  if(d.type==='exec_approval'){renderApprovalRequest(d);return}
+  if(d.type==='progress'){ensureProgress(d.content||'思考中...');return}
   if(d.type==='tool_hint'){showMessages();const e=document.createElement('div');e.className='msg tool-hint';e.textContent=d.content;box.appendChild(e);scrollB();return}
-  if(d.type==='error'){showMessages();if(progEl){progEl.remove();progEl=null}const e=document.createElement('div');e.className='msg error';e.textContent=d.content||'发生错误';box.appendChild(e);scrollB();waiting=false;updBtn();return}
-  if(d.type==='response'){showMessages();if(progEl){progEl.remove();progEl=null}const e=document.createElement('div');e.className='msg bot';e.innerHTML=marked.parse(d.content||'(空回复)');box.appendChild(e);scrollB();waiting=false;updBtn()}
+  if(d.type==='error'){showMessages();clearProgress();const e=document.createElement('div');e.className='msg error';e.textContent=d.content||'发生错误';box.appendChild(e);scrollB();waiting=false;updBtn();return}
+  if(d.type==='response'){showMessages();clearProgress();const e=document.createElement('div');e.className='msg bot';e.innerHTML=marked.parse(d.content||'(空回复)');box.appendChild(e);scrollB();waiting=false;updBtn()}
 }
-function sendMsg(){const t=document.getElementById('input'),v=t.value.trim();if(!v||!ws||ws.readyState!==1)return;showMessages();const box=document.getElementById('messages'),e=document.createElement('div');e.className='msg user';e.textContent=v;box.appendChild(e);scrollB();ws.send(JSON.stringify({type:'message',content:v}));t.value='';autoH(t);waiting=true;updBtn()}
+function sendMsg(){const t=document.getElementById('input'),v=t.value.trim();if(!v||!ws||ws.readyState!==1)return;showMessages();const box=document.getElementById('messages'),e=document.createElement('div');e.className='msg user';e.textContent=v;box.appendChild(e);scrollB();ws.send(JSON.stringify({type:'message',content:v}));t.value='';autoH(t);waiting=true;updBtn();ensureProgress('正在处理中...')}
 function sendCmd(c){if(!ws||ws.readyState!==1)return;ws.send(JSON.stringify({type:'command',content:c}));if(c==='/new'){document.getElementById('messages').innerHTML='';document.getElementById('welcomeBox').style.display='flex';document.getElementById('messages').style.display='none';hasMessages=false;progEl=null}}
 function updBtn(){document.getElementById('sendBtn').disabled=waiting}
 function scrollB(){const e=document.getElementById('messages');e.scrollTop=e.scrollHeight}
@@ -394,6 +456,7 @@ async function loadOverview(){
     document.getElementById('overviewKV').innerHTML=`
       <div class="kv"><span class="k">模型</span><span class="v">${d.model}</span></div>
       <div class="kv"><span class="k">Provider</span><span class="v">${formatProviderLabel(d.provider,d.configured_provider)}</span></div>
+      <div class="kv"><span class="k">命令执行</span><span class="v">${formatExecModeLabel(d.exec_mode)}</span></div>
       <div class="kv"><span class="k">工作区</span><span class="v" style="font-size:12px;font-family:monospace">${d.workspace}</span></div>`;
   }catch(e){document.getElementById('overviewStats').innerHTML='<div class="empty">加载失败</div>'}
 }
@@ -501,15 +564,23 @@ async function loadSettings(){
     document.getElementById('cfgBrave').value=t.web?.search?.apiKey||'';
     document.getElementById('cfgProxy').value=t.web?.proxy||'';
     document.getElementById('cfgTimeout').value=t.exec?.timeout??60;
+    document.getElementById('cfgExecMode').value=t.exec?.mode||'approval';
     document.getElementById('cfgRestrict').value=String(t.restrictToWorkspace??false);
   }catch(e){}
 }
 async function saveSettings(){
-  const pl={agents:{defaults:{model:document.getElementById('cfgModel').value,provider:document.getElementById('cfgProvider').value,temperature:parseFloat(document.getElementById('cfgTemp').value),maxTokens:parseInt(document.getElementById('cfgMaxTok').value),contextWindowTokens:parseInt(document.getElementById('cfgCtx').value)}},providers:{},tools:{web:{proxy:document.getElementById('cfgProxy').value||null,search:{apiKey:document.getElementById('cfgBrave').value}},exec:{timeout:parseInt(document.getElementById('cfgTimeout').value)},restrictToWorkspace:document.getElementById('cfgRestrict').value==='true'}};
+  const pl={agents:{defaults:{model:document.getElementById('cfgModel').value,provider:document.getElementById('cfgProvider').value,temperature:parseFloat(document.getElementById('cfgTemp').value),maxTokens:parseInt(document.getElementById('cfgMaxTok').value),contextWindowTokens:parseInt(document.getElementById('cfgCtx').value)}},providers:{},tools:{web:{proxy:document.getElementById('cfgProxy').value||null,search:{apiKey:document.getElementById('cfgBrave').value}},exec:{timeout:parseInt(document.getElementById('cfgTimeout').value),mode:document.getElementById('cfgExecMode').value},restrictToWorkspace:document.getElementById('cfgRestrict').value==='true'}};
   for(const p of PROVS){const v=document.getElementById('key_'+p.id).value;if(v&&!v.includes('***'))pl.providers[p.id]={apiKey:v}}
   const ck=document.getElementById('keyCustom').value,cb=document.getElementById('baseCustom').value;
   if((ck&&!ck.includes('***'))||cb){if(!pl.providers.custom)pl.providers.custom={};if(ck&&!ck.includes('***'))pl.providers.custom.apiKey=ck;if(cb)pl.providers.custom.apiBase=cb}
-  try{await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pl)});const m=document.getElementById('saveMsg');m.textContent='已保存！重启 CMClaw 后生效';setTimeout(()=>m.textContent='',5e3)}catch(e){alert('保存失败: '+e.message)}
+  try{
+    const res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pl)});
+    const data=await res.json();
+    if(data.runtime)applyRuntimeStatus(data.runtime);
+    const m=document.getElementById('saveMsg');
+    m.textContent=data.message||'已保存';
+    setTimeout(()=>m.textContent='',5e3);
+  }catch(e){alert('保存失败: '+e.message)}
 }
 
 connect();

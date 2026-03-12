@@ -334,6 +334,7 @@ class ExecToolConfig(Base):
 
     timeout: int = 60
     path_append: str = ""
+    mode: Literal["chat", "approval", "auto"] = "approval"
 
 
 class MCPServerConfig(Base):

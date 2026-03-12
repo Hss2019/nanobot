@@ -72,9 +72,9 @@ Skills with available="false" need dependencies installed first - you can try in
 - Use file tools when they are simpler or more reliable than shell commands.
 """
 
-        return f"""# nanobot 🐈
+        return f"""# CMClaw
 
-You are nanobot, a helpful AI assistant.
+You are CMClaw, a helpful AI assistant.
 
 ## Runtime
 {runtime}
@@ -87,7 +87,7 @@ Your workspace is at: {workspace_path}
 
 {platform_policy}
 
-## nanobot Guidelines
+## CMClaw Guidelines
 - State intent before tool calls, but NEVER predict or claim results before receiving them.
 - Before modifying a file, read it first. Do not assume files or directories exist.
 - After writing or editing a file, re-read it if accuracy matters.
@@ -114,6 +114,9 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
             file_path = self.workspace / filename
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")
+                if filename == "SOUL.md":
+                    content = content.replace("nanobot 🐈", "CMClaw")
+                    content = content.replace("nanobot", "CMClaw")
                 parts.append(f"## {filename}\n\n{content}")
 
         return "\n\n".join(parts) if parts else ""

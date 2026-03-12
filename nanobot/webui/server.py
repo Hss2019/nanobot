@@ -34,6 +34,29 @@ def create_app(
 
     agent_task: asyncio.Task | None = None
     dispatcher_task: asyncio.Task | None = None
+    exec_tool = agent.tools.get("exec")
+    if exec_tool and hasattr(exec_tool, "set_approval_channel"):
+        exec_tool.set_approval_channel(web_channel)
+
+    def _runtime_status() -> dict[str, Any]:
+        cron_svc = getattr(agent, "_cron_service", None) or getattr(agent, "cron_service", None)
+        cron_info = {}
+        if cron_svc:
+            try:
+                cron_info = cron_svc.status()
+            except Exception:
+                pass
+        return {
+            "model": config.agents.defaults.model,
+            "provider": config.get_provider_name() or config.agents.defaults.provider,
+            "configured_provider": config.agents.defaults.provider,
+            "has_key": bool(config.get_api_key()),
+            "web_clients": web_channel.connected_clients,
+            "sessions": len(session_manager.list_sessions()),
+            "workspace": str(config.workspace_path),
+            "cron": cron_info,
+            "exec_mode": config.tools.exec.mode,
+        }
 
     async def _dispatch_outbound():
         """Consume outbound messages from the bus and route to WebChannel."""
@@ -42,8 +65,6 @@ def create_app(
             try:
                 msg = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
                 if msg.metadata.get("_progress"):
-                    if msg.metadata.get("_tool_hint") and not config.channels.send_tool_hints:
-                        continue
                     if not msg.metadata.get("_tool_hint") and not config.channels.send_progress:
                         continue
                 if msg.channel == "web" or web_channel.connected_clients > 0:
@@ -133,10 +154,7 @@ def create_app(
 
             await ws.send_text(json.dumps({
                 "type": "connected", "chat_id": chat_id,
-                "model": config.agents.defaults.model,
-                "provider": config.get_provider_name() or config.agents.defaults.provider,
-                "configured_provider": config.agents.defaults.provider,
-                "has_key": bool(config.get_api_key()),
+                **_runtime_status(),
                 "history": history_msgs,
             }, ensure_ascii=False))
 
@@ -149,6 +167,13 @@ def create_app(
                 except json.JSONDecodeError:
                     data = {"type": "message", "content": raw}
                 msg_type = data.get("type", "message")
+                if msg_type == "approval":
+                    await web_channel.resolve_exec_approval(
+                        chat_id=chat_id,
+                        approval_id=str(data.get("approval_id", "")),
+                        approved=bool(data.get("approved")),
+                    )
+                    continue
                 content = data.get("content", "").strip()
                 if not content:
                     continue
@@ -177,35 +202,38 @@ def create_app(
     @app.post("/api/config")
     async def save_config_api(payload: dict[str, Any]):
         from nanobot.config.loader import load_config, save_config
+        from nanobot.cli.commands import _make_provider_safe
         cfg = load_config()
         current = cfg.model_dump(by_alias=True)
         _deep_merge(current, payload)
         from nanobot.config.schema import Config as CfgClass
         updated = CfgClass(**current)
         save_config(updated)
-        return JSONResponse({"status": "ok", "message": "已保存，重启后生效"})
+
+        config.agents = updated.agents
+        config.channels = updated.channels
+        config.providers = updated.providers
+        config.gateway = updated.gateway
+        config.tools = updated.tools
+        web_channel.config = updated.channels.web
+
+        provider = _make_provider_safe(updated)
+        agent.apply_runtime_config(updated, provider)
+        if exec_tool := agent.tools.get("exec"):
+            if hasattr(exec_tool, "set_approval_channel"):
+                exec_tool.set_approval_channel(web_channel)
+
+        return JSONResponse({
+            "status": "ok",
+            "message": "已保存，当前会话已热更新",
+            "runtime": _runtime_status(),
+        })
 
     # ── Status API ──
 
     @app.get("/api/status")
     async def get_status():
-        cron_svc = getattr(agent, '_cron_service', None) or getattr(agent, 'cron_service', None)
-        cron_info = {}
-        if cron_svc:
-            try:
-                cron_info = cron_svc.status()
-            except Exception:
-                pass
-        return JSONResponse({
-            "model": config.agents.defaults.model,
-            "provider": config.get_provider_name() or config.agents.defaults.provider,
-            "configured_provider": config.agents.defaults.provider,
-            "has_key": bool(config.get_api_key()),
-            "web_clients": web_channel.connected_clients,
-            "sessions": len(session_manager.list_sessions()),
-            "workspace": str(config.workspace_path),
-            "cron": cron_info,
-        })
+        return JSONResponse(_runtime_status())
 
     # ── Sessions API ──
 
