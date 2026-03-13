@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
 
@@ -95,6 +95,21 @@ def create_app(
 
     def _relative_doc_path(path: Path) -> str:
         return str(path.relative_to(config.workspace_path)).replace("\\", "/")
+
+    def _history_text(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "text" and item.get("text"):
+                    parts.append(str(item["text"]))
+                elif item.get("type") == "image_url":
+                    parts.append("[image]")
+            return "\n".join(part for part in parts if part).strip() or "[image]"
+        return str(content or "")
 
     async def _dispatch_outbound():
         """Consume outbound messages from the bus and route to WebChannel."""
@@ -192,7 +207,7 @@ def create_app(
                 session = session_manager.get_or_create(session_key)
                 for m in session.messages:
                     role = m.get("role", "")
-                    content = m.get("content", "")
+                    content = _history_text(m.get("content", ""))
                     if role == "user":
                         history_msgs.append({"type": "history_user", "content": content})
                     elif role == "assistant" and content:
@@ -224,12 +239,13 @@ def create_app(
                     )
                     continue
                 content = data.get("content", "").strip()
-                if not content:
+                media = [str(item) for item in (data.get("media") or []) if str(item).strip()]
+                if not content and not media:
                     continue
                 if msg_type == "command":
                     content = content if content.startswith("/") else f"/{content}"
                 await web_channel._handle_message(
-                    sender_id="web_user", chat_id=chat_id, content=content, session_key=session_key,
+                    sender_id="web_user", chat_id=chat_id, content=content, media=media, session_key=session_key,
                 )
         except WebSocketDisconnect:
             logger.info("WebSocket disconnected: {}", chat_id)
@@ -247,6 +263,36 @@ def create_app(
         data = cfg.model_dump(by_alias=True)
         _mask_keys(data)
         return JSONResponse(data)
+
+    @app.post("/api/uploads/images")
+    async def upload_images(files: list[UploadFile] = File(...)):
+        from nanobot.config.paths import get_media_dir
+        from nanobot.utils.helpers import detect_image_mime, safe_filename
+
+        upload_dir = get_media_dir("web") / "uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        saved: list[dict[str, str]] = []
+
+        for file in files:
+            raw = await file.read()
+            mime = detect_image_mime(raw)
+            if not mime:
+                continue
+            ext = {
+                "image/png": ".png",
+                "image/jpeg": ".jpg",
+                "image/gif": ".gif",
+                "image/webp": ".webp",
+            }.get(mime, "")
+            base = Path(file.filename or "image").stem or "image"
+            target = upload_dir / f"{uuid.uuid4().hex[:10]}_{safe_filename(base)}{ext}"
+            target.write_bytes(raw)
+            saved.append({"name": file.filename or target.name, "path": str(target), "mime": mime})
+
+        if not saved:
+            return JSONResponse({"status": "error", "message": "没有可用的图片文件"}, status_code=400)
+
+        return JSONResponse({"status": "ok", "files": saved})
 
     @app.post("/api/config")
     async def save_config_api(payload: dict[str, Any]):

@@ -16,14 +16,16 @@
   --accent:#3C87FB;--accent-hover:#5a9bff;--accent-dim:rgba(60,135,251,.12);--accent-glow:rgba(60,135,251,.25);
   --green:#4ade80;--amber:#fbbf24;--blue:#60a5fa;--red:#f87171;
   --radius:10px;--radius-sm:6px;--nav-w:220px;--topbar-h:52px;
+  --runtime-bar-bg:rgba(19,21,29,.65);
   --shadow:0 1px 3px rgba(0,0,0,.3);--shadow-lg:0 8px 24px rgba(0,0,0,.4);
 }
 [data-theme="light"]{
   --shell-bg:#f0f2f5;--nav-bg:#fff;--content-bg:#f7f8fa;--card-bg:#fff;
   --topbar-bg:#fff;--border:#e2e4ea;--border-light:#d0d3dc;
-  --text:#1a1c24;--text-muted:#6b6e80;--text-dim:#9a9db0;
+  --text:#1a1c24;--text-muted:#565a6d;--text-dim:#747a90;
   --accent:#2b6edb;--accent-hover:#3C87FB;--accent-dim:rgba(43,110,219,.08);--accent-glow:rgba(43,110,219,.15);
   --green:#16a34a;--amber:#d97706;--blue:#2563eb;--red:#dc2626;
+  --runtime-bar-bg:rgba(255,255,255,.92);
   --shadow:0 1px 3px rgba(0,0,0,.06);--shadow-lg:0 8px 24px rgba(0,0,0,.08);
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -145,15 +147,27 @@ tr:hover td{background:var(--accent-dim)}
 .approval-allow{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
 .approval-deny{background:rgba(248,113,113,.14);color:var(--red);border:1px solid rgba(248,113,113,.35)}
 .approval-note{font-size:11px;color:var(--text-dim)}
-.chat-runtime{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;border-top:1px solid var(--border);background:rgba(19,21,29,.65);flex-shrink:0}
+.chat-runtime{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;border-top:1px solid var(--border);background:var(--runtime-bar-bg);backdrop-filter:blur(8px);flex-shrink:0}
 .mode-switch{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.mode-label{font-size:12px;color:var(--text-muted);font-weight:600}
+.mode-label{font-size:12px;color:var(--text);font-weight:700}
 .mode-pills{display:flex;gap:6px;flex-wrap:wrap}
-.mode-pill{border:1px solid var(--border);background:none;color:var(--text-muted);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.mode-pill{border:1px solid var(--border);background:none;color:var(--text-muted);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
 .mode-pill:hover{border-color:var(--accent);color:var(--accent)}
 .mode-pill.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 2px 8px var(--accent-glow)}
-.runtime-hint{font-size:11px;color:var(--text-dim)}
-.compose{display:flex;gap:10px;padding:14px 20px;background:var(--topbar-bg);border-top:1px solid var(--border);flex-shrink:0}
+.runtime-hint{font-size:11px;color:var(--text-muted);font-weight:600}
+.compose{display:flex;gap:10px;padding:14px 20px;background:var(--topbar-bg);border-top:1px solid var(--border);flex-shrink:0;align-items:flex-end}
+.compose-main{flex:1;display:flex;flex-direction:column;gap:8px}
+.compose-actions{display:flex;gap:10px;align-items:flex-end}
+.icon-btn{background:none;border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;transition:all .15s}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.compose-preview{display:flex;gap:8px;flex-wrap:wrap}
+.image-chip{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--accent-dim);border:1px solid var(--border);border-radius:10px;max-width:220px}
+.image-chip img{width:38px;height:38px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.image-chip span{font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.image-chip button{border:none;background:none;color:var(--red);cursor:pointer;font-size:14px;line-height:1}
+.msg.user-images{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.msg.user-images img{width:88px;height:88px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.22)}
+.msg.bot.streaming{white-space:pre-wrap;font-family:inherit}
 .compose textarea{flex:1;background:var(--shell-bg);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius);font-size:13px;font-family:inherit;resize:none;outline:none;max-height:120px;line-height:1.5;transition:border-color .15s,box-shadow .15s}
 .compose textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
 .compose button{background:linear-gradient(135deg,#3C87FB,#2b6edb);color:#fff;border:none;padding:10px 22px;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:600;flex-shrink:0;box-shadow:0 2px 8px var(--accent-glow);transition:all .15s}
@@ -231,8 +245,15 @@ tr:hover td{background:var(--accent-dim)}
       <span class="runtime-hint" id="execModeHint">当前模式：审批后执行</span>
     </div>
     <div class="compose">
-      <textarea id="input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" autofocus></textarea>
-      <button id="sendBtn" onclick="sendMsg()">发送</button>
+      <div class="compose-main">
+        <div class="compose-preview" id="imagePreview"></div>
+        <textarea id="input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行；可粘贴图片)" autofocus></textarea>
+      </div>
+      <div class="compose-actions">
+        <input id="imageInput" type="file" accept="image/*" multiple hidden>
+        <button class="icon-btn" type="button" onclick="document.getElementById('imageInput').click()">添加图片</button>
+        <button id="sendBtn" onclick="sendMsg()">发送</button>
+      </div>
     </div>
   </div>
 
@@ -297,6 +318,11 @@ tr:hover td{background:var(--accent-dim)}
   <!-- Settings -->
   <div class="panel" id="settingsPanel">
     <div class="page-pad" style="max-width:780px">
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+        <button class="btn" onclick="saveSettings()">保存设置</button>
+        <button class="btn btn-outline" onclick="testProvider(document.getElementById('cfgProvider').value||'auto', this)">测试当前配置</button>
+        <span class="save-msg" id="saveMsg"></span>
+      </div>
       <div class="card">
         <h3>模型配置</h3>
         <div class="field-row">
@@ -343,11 +369,6 @@ tr:hover td{background:var(--accent-dim)}
           </div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
-        <button class="btn" onclick="saveSettings()">保存设置</button>
-        <button class="btn btn-outline" onclick="testProvider(document.getElementById('cfgProvider').value||'auto', this)">测试当前配置</button>
-        <span class="save-msg" id="saveMsg"></span>
-      </div>
     </div>
   </div>
 
@@ -386,14 +407,50 @@ function toggleTheme(){const l=document.documentElement.getAttribute('data-theme
 (function(){if(localStorage.getItem('cmclaw_theme')==='light'){document.documentElement.setAttribute('data-theme','light');document.getElementById('themeBtn').textContent='深色'}})();
 
 // ── WebSocket ──
-let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false,selectedSessionKey=null,currentExecMode='approval';
+let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false,selectedSessionKey=null,currentExecMode='approval',pendingImages=[],activeStream=null;
 function showMessages(){if(!hasMessages){hasMessages=true;document.getElementById('welcomeBox').style.display='none';document.getElementById('messages').style.display='flex'}}
 function resetChatView(){
+  cancelActiveStream(false);
   document.getElementById('messages').innerHTML='';
   document.getElementById('messages').style.display='none';
   document.getElementById('welcomeBox').style.display='flex';
   hasMessages=false;
   clearProgress();
+  resetComposerImages();
+}
+function resetComposerImages(){
+  pendingImages.forEach(item=>{if(item.previewUrl)URL.revokeObjectURL(item.previewUrl)});
+  pendingImages=[];
+  renderPendingImages();
+  const input=document.getElementById('imageInput');
+  if(input)input.value='';
+}
+function renderPendingImages(){
+  const box=document.getElementById('imagePreview');
+  if(!box)return;
+  if(!pendingImages.length){box.innerHTML='';return}
+  box.innerHTML=pendingImages.map((item,idx)=>`<div class="image-chip"><img src="${item.previewUrl}" alt="${escapeHtml(item.name)}"><span>${escapeHtml(item.name)}</span><button type="button" onclick="removePendingImage(${idx})">×</button></div>`).join('');
+}
+function removePendingImage(idx){
+  const [item]=pendingImages.splice(idx,1);
+  if(item?.previewUrl)URL.revokeObjectURL(item.previewUrl);
+  renderPendingImages();
+}
+function addPendingFiles(files){
+  const accepted=[...files].filter(file=>file.type&&file.type.startsWith('image/'));
+  for(const file of accepted){
+    pendingImages.push({file,name:file.name,previewUrl:URL.createObjectURL(file)});
+  }
+  renderPendingImages();
+}
+async function uploadPendingImages(){
+  if(!pendingImages.length)return [];
+  const form=new FormData();
+  pendingImages.forEach(item=>form.append('files', item.file, item.name));
+  const res=await fetch('/api/uploads/images',{method:'POST',body:form});
+  const data=await res.json();
+  if(!res.ok)throw new Error(data.message||'图片上传失败');
+  return (data.files||[]).map(item=>item.path);
 }
 function formatProviderLabel(provider, configuredProvider){
   if(!provider)return '--';
@@ -502,6 +559,52 @@ function enhanceBotMessage(el){
     wrap.appendChild(btn);
   });
 }
+function renderUserMessage(text, images=[]){
+  showMessages();
+  const box=document.getElementById('messages');
+  const e=document.createElement('div');
+  e.className='msg user';
+  const safeText=escapeHtml(text||'');
+  const imagesHtml=images.length?`<div class="msg.user-images">${images.map(item=>`<img src="${item.previewUrl}" alt="${escapeHtml(item.name)}">`).join('')}</div>`:'';
+  const textHtml=safeText?`<div>${safeText.replaceAll('\n','<br>')}</div>`:'';
+  e.innerHTML=imagesHtml+textHtml;
+  box.appendChild(e);
+  scrollB();
+}
+function cancelActiveStream(finalize=false){
+  if(!activeStream)return;
+  clearInterval(activeStream.timer);
+  if(finalize){
+    activeStream.el.classList.remove('streaming');
+    activeStream.el.innerHTML=marked.parse(activeStream.raw||'(空回复)');
+    enhanceBotMessage(activeStream.el);
+  }
+  activeStream=null;
+}
+function streamBotResponse(content){
+  showMessages();
+  clearProgress();
+  cancelActiveStream(true);
+  const box=document.getElementById('messages');
+  const e=document.createElement('div');
+  e.className='msg bot streaming';
+  box.appendChild(e);
+  const raw=String(content||'(空回复)');
+  let idx=0;
+  const step=Math.max(3, Math.ceil(raw.length/90));
+  const tick=()=>{
+    idx=Math.min(raw.length, idx+step);
+    e.textContent=raw.slice(0, idx);
+    scrollB();
+    if(idx>=raw.length){
+      cancelActiveStream(true);
+      waiting=false;
+      updBtn();
+    }
+  };
+  activeStream={el:e,raw,timer:setInterval(tick,18)};
+  tick();
+}
 async function setExecMode(mode){
   if(mode===currentExecMode)return;
   const prevMode=currentExecMode;
@@ -559,13 +662,32 @@ function handle(d){
   if(d.type==='progress'){ensureProgress(d.content||'思考中...');return}
   if(d.type==='tool_hint'){showMessages();const e=document.createElement('div');e.className='msg tool-hint';e.textContent=d.content;box.appendChild(e);scrollB();return}
   if(d.type==='error'){showMessages();clearProgress();const e=document.createElement('div');e.className='msg error';e.textContent=d.content||'发生错误';box.appendChild(e);scrollB();waiting=false;updBtn();return}
-  if(d.type==='response'){showMessages();clearProgress();const e=document.createElement('div');e.className='msg bot';e.innerHTML=marked.parse(d.content||'(空回复)');enhanceBotMessage(e);box.appendChild(e);scrollB();waiting=false;updBtn()}
+  if(d.type==='response'){streamBotResponse(d.content||'(空回复)')}
 }
-function sendMsg(){const t=document.getElementById('input'),v=t.value.trim();if(!v||!ws||ws.readyState!==1)return;showMessages();const box=document.getElementById('messages'),e=document.createElement('div');e.className='msg user';e.textContent=v;box.appendChild(e);scrollB();ws.send(JSON.stringify({type:'message',content:v}));t.value='';autoH(t);waiting=true;updBtn();ensureProgress('正在处理中...')}
-function sendCmd(c){if(!ws||ws.readyState!==1)return;ws.send(JSON.stringify({type:'command',content:c}));if(c==='/new'){document.getElementById('messages').innerHTML='';document.getElementById('welcomeBox').style.display='flex';document.getElementById('messages').style.display='none';hasMessages=false;progEl=null}}
+async function sendMsg(){
+  const t=document.getElementById('input'),v=t.value.trim();
+  if((!v&&!pendingImages.length)||!ws||ws.readyState!==1)return;
+  let media=[];
+  try{
+    if(pendingImages.length)media=await uploadPendingImages();
+  }catch(e){
+    alert('图片上传失败: '+e.message);
+    return;
+  }
+  renderUserMessage(v, pendingImages);
+  ws.send(JSON.stringify({type:'message',content:v,media}));
+  t.value='';
+  autoH(t);
+  resetComposerImages();
+  waiting=true;
+  updBtn();
+  ensureProgress('正在处理中...');
+}
+function sendCmd(c){if(!ws||ws.readyState!==1)return;ws.send(JSON.stringify({type:'command',content:c}));if(c==='/new'){resetChatView();progEl=null}}
 function updBtn(){document.getElementById('sendBtn').disabled=waiting}
 function scrollB(){const e=document.getElementById('messages');e.scrollTop=e.scrollHeight}
-const inp=document.getElementById('input');inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}});inp.addEventListener('input',()=>autoH(inp));
+const inp=document.getElementById('input');inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}});inp.addEventListener('input',()=>autoH(inp));inp.addEventListener('paste',e=>{const files=[...(e.clipboardData?.files||[])];if(files.some(file=>file.type&&file.type.startsWith('image/'))){e.preventDefault();addPendingFiles(files)}});
+document.getElementById('imageInput').addEventListener('change',e=>addPendingFiles(e.target.files||[]));
 function autoH(e){e.style.height='auto';e.style.height=Math.min(e.scrollHeight,120)+'px'}
 
 // ── Overview ──
@@ -660,7 +782,7 @@ async function loadSkills(){
       const always=s.always?' <span class="tag blue">常驻</span>':'';
       const action=`<button class="btn btn-sm btn-outline" onclick="toggleSkill('${s.name}', ${!s.enabled})">${s.enabled?'禁用':'启用'}</button>`;
       return `<tr><td style="font-weight:600">${s.name}${always}</td><td>${src}</td><td style="color:var(--text-muted);font-size:12px">${s.description}</td><td>${enabled} ${available}</td><td>${action}</td></tr>`;
-    }).join('')+'</table><div class="hint-box" style="margin-top:12px">技能管理当前支持启用 / 禁用；工作区技能优先级高于内置技能。</div>';
+    }).join('')+'</table><div class="hint-box" style="margin-top:12px">技能来自两处：工作区 `skills/{技能名}/SKILL.md` 和内置 `nanobot/skills`。此页每次打开都会重新扫描磁盘并重新检查依赖状态，新增工作区技能后刷新页面即可识别，不需要重启。</div>';
   }catch(e){c.innerHTML='<div class="empty">加载失败</div>'}
 }
 async function toggleSkill(name, enabled){
@@ -680,7 +802,7 @@ async function loadTools(){
       const status=t.enabled?'<span class="tag green">启用</span>':'<span class="tag gray">禁用</span>';
       const action=`<button class="btn btn-sm btn-outline" onclick="toggleTool('${t.name}', ${!t.enabled})">${t.enabled?'禁用':'启用'}</button>`;
       return `<tr><td style="font-weight:600;font-family:monospace">${t.name}</td><td style="color:var(--text-muted);font-size:12px">${t.description}</td><td>${status}</td><td>${action}</td></tr>`;
-    }).join('')+'</table><div class="hint-box" style="margin-top:12px">禁用工具后当前会话立即生效，后续工具调用不会再暴露给模型。</div>';
+    }).join('')+'</table><div class="hint-box" style="margin-top:12px">工具主要分两类：代码内置注册工具，以及启动时接入的 MCP 工具。此页每次打开读取当前运行时工具注册表；禁用后当前会话立即生效，但新增代码内置工具或修改 MCP 配置后通常需要重新启动对应运行时。</div>';
   }catch(e){c.innerHTML='<div class="empty">加载失败</div>'}
 }
 async function toggleTool(name, enabled){
