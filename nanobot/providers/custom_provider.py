@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -12,6 +13,7 @@ from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 
 class CustomProvider(LLMProvider):
+    _MAX_TOKENS_LIMIT_RE = re.compile(r"Range of max_tokens should be \[1,\s*(\d+)\]", re.I)
 
     def __init__(self, api_key: str = "no-key", api_base: str = "http://localhost:8000/v1", default_model: str = "default"):
         super().__init__(api_key, api_base)
@@ -39,7 +41,23 @@ class CustomProvider(LLMProvider):
         try:
             return self._parse(await self._client.chat.completions.create(**kwargs))
         except Exception as e:
+            limit = self._extract_max_tokens_limit(str(e))
+            if limit and kwargs["max_tokens"] > limit:
+                try:
+                    kwargs["max_tokens"] = limit
+                    return self._parse(await self._client.chat.completions.create(**kwargs))
+                except Exception as retry_error:
+                    return LLMResponse(content=f"Error: {retry_error}", finish_reason="error")
             return LLMResponse(content=f"Error: {e}", finish_reason="error")
+
+    def _extract_max_tokens_limit(self, message: str) -> int | None:
+        match = self._MAX_TOKENS_LIMIT_RE.search(message)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
 
     def _parse(self, response: Any) -> LLMResponse:
         choice = response.choices[0]
@@ -58,4 +76,3 @@ class CustomProvider(LLMProvider):
 
     def get_default_model(self) -> str:
         return self.default_model
-

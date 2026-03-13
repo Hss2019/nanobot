@@ -187,6 +187,12 @@ class AgentLoop:
         if not text:
             return None
         lower = text.lower()
+        if "range of max_tokens should be [1, 32768]" in lower:
+            return (
+                f"当前渠道对 `max_tokens` 的单次请求上限是 32768，而不是模型页里展示的理论最大输出长度。\n"
+                "我已按端点限制自动重试；如果你仍然看到这个错误，请把设置页里的“最大输出 Token”调低到 32768 或以下后再试。\n\n"
+                f"原始错误：{text}"
+            )
         if "model" in lower and "not supported" in lower:
             return (
                 f"当前模型 `{self.model}` 在当前 Provider 配置下不可用。\n"
@@ -300,6 +306,12 @@ class AgentLoop:
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    if on_progress:
+                        preview = result if len(result) <= 1200 else result[:1200] + "\n... (已截断)"
+                        await on_progress(
+                            json.dumps({"tool": tool_call.name, "preview": preview}, ensure_ascii=False),
+                            tool_result=True,
+                        )
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -474,10 +486,11 @@ class AgentLoop:
             channel=msg.channel, chat_id=msg.chat_id,
         )
 
-        async def _bus_progress(content: str, *, tool_hint: bool = False) -> None:
+        async def _bus_progress(content: str, *, tool_hint: bool = False, tool_result: bool = False) -> None:
             meta = dict(msg.metadata or {})
             meta["_progress"] = True
             meta["_tool_hint"] = tool_hint
+            meta["_tool_result"] = tool_result
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel, chat_id=msg.chat_id, content=content, metadata=meta,
             ))

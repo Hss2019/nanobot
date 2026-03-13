@@ -69,8 +69,11 @@ class WebChannel(BaseChannel):
         """Send a single message over a WebSocket, handling errors."""
         is_progress = msg.metadata.get("_progress", False)
         is_tool_hint = msg.metadata.get("_tool_hint", False)
+        is_tool_result = msg.metadata.get("_tool_result", False)
 
-        if is_tool_hint:
+        if is_tool_result:
+            msg_type = "tool_result"
+        elif is_tool_hint:
             msg_type = "tool_hint"
         elif is_progress:
             msg_type = "progress"

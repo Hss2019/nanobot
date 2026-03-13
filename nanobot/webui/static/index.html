@@ -127,6 +127,15 @@ tr:hover td{background:var(--accent-dim)}
 .msg.bot code{font-size:12.5px}
 .msg.bot p{margin:4px 0}.msg.bot ul,.msg.bot ol{margin:4px 0 4px 18px}
 .msg.bot table{border-collapse:collapse;margin:8px 0}.msg.bot th,.msg.bot td{border:1px solid var(--border);padding:4px 8px;font-size:12px}
+.msg.bot.failed{border-color:rgba(248,113,113,.28)}
+.msg-retry{margin-top:12px}
+.msg-retry button{border:1px solid var(--border);background:none;color:var(--text);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700}
+.msg-retry button:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.msg.tool-result{align-self:flex-start;max-width:78%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--accent-dim);font-size:12px}
+.msg.tool-result details{cursor:pointer}
+.msg.tool-result summary{list-style:none;color:var(--text);font-weight:700}
+.msg.tool-result summary::-webkit-details-marker{display:none}
+.msg.tool-result pre{margin-top:10px;background:var(--shell-bg);border:1px solid var(--border);border-radius:8px;padding:10px;white-space:pre-wrap;overflow-x:auto;color:var(--text-muted)}
 .code-wrap{position:relative}
 .copy-code-btn{position:absolute;top:10px;right:10px;border:1px solid var(--border);background:rgba(19,21,29,.88);color:#fff;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;z-index:2}
 .copy-code-btn:hover{border-color:var(--accent);color:var(--accent)}
@@ -407,7 +416,7 @@ function toggleTheme(){const l=document.documentElement.getAttribute('data-theme
 (function(){if(localStorage.getItem('cmclaw_theme')==='light'){document.documentElement.setAttribute('data-theme','light');document.getElementById('themeBtn').textContent='深色'}})();
 
 // ── WebSocket ──
-let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false,selectedSessionKey=null,currentExecMode='approval',pendingImages=[],activeStream=null;
+let ws=null,chatId=null,waiting=false,reDelay=1e3,progEl=null,hasMessages=false,selectedSessionKey=null,currentExecMode='approval',pendingImages=[],activeStream=null,lastPendingRequest=null;
 function showMessages(){if(!hasMessages){hasMessages=true;document.getElementById('welcomeBox').style.display='none';document.getElementById('messages').style.display='flex'}}
 function resetChatView(){
   cancelActiveStream(false);
@@ -451,6 +460,10 @@ async function uploadPendingImages(){
   const data=await res.json();
   if(!res.ok)throw new Error(data.message||'图片上传失败');
   return (data.files||[]).map(item=>item.path);
+}
+function isFailureText(content){
+  const text=String(content||'').trim();
+  return /^Error[:：]/i.test(text) || text.includes('invalid_request_error') || text.includes('当前渠道对 `max_tokens`');
 }
 function formatProviderLabel(provider, configuredProvider){
   if(!provider)return '--';
@@ -604,6 +617,39 @@ function streamBotResponse(content){
   };
   activeStream={el:e,raw,timer:setInterval(tick,18)};
   tick();
+  return e;
+}
+function attachRetryAction(el, payload){
+  if(!payload || el.querySelector('.msg-retry'))return;
+  el.classList.add('failed');
+  const wrap=document.createElement('div');
+  wrap.className='msg-retry';
+  const btn=document.createElement('button');
+  btn.type='button';
+  btn.textContent='重试';
+  btn.addEventListener('click',()=>retryFailedPayload(payload));
+  wrap.appendChild(btn);
+  el.appendChild(wrap);
+}
+function retryFailedPayload(payload){
+  if(!ws||ws.readyState!==1||waiting)return;
+  renderUserMessage(payload.content||'', []);
+  ws.send(JSON.stringify({type:'message',content:payload.content||'',media:payload.media||[]}));
+  lastPendingRequest={content:payload.content||'',media:[...(payload.media||[])]};
+  waiting=true;
+  updBtn();
+  ensureProgress('正在处理中...');
+}
+function renderToolResultCard(raw){
+  showMessages();
+  let data={tool:'工具',preview:String(raw||'')};
+  try{data=JSON.parse(raw)}catch(e){}
+  const box=document.getElementById('messages');
+  const e=document.createElement('div');
+  e.className='msg tool-result';
+  e.innerHTML=`<details><summary>查看 ${escapeHtml(data.tool||'工具')} 输出</summary><pre>${escapeHtml(data.preview||'')}</pre></details>`;
+  box.appendChild(e);
+  scrollB();
 }
 async function setExecMode(mode){
   if(mode===currentExecMode)return;
@@ -661,8 +707,22 @@ function handle(d){
   if(d.type==='exec_approval'){renderApprovalRequest(d);return}
   if(d.type==='progress'){ensureProgress(d.content||'思考中...');return}
   if(d.type==='tool_hint'){showMessages();const e=document.createElement('div');e.className='msg tool-hint';e.textContent=d.content;box.appendChild(e);scrollB();return}
+  if(d.type==='tool_result'){renderToolResultCard(d.content);return}
   if(d.type==='error'){showMessages();clearProgress();const e=document.createElement('div');e.className='msg error';e.textContent=d.content||'发生错误';box.appendChild(e);scrollB();waiting=false;updBtn();return}
-  if(d.type==='response'){streamBotResponse(d.content||'(空回复)')}
+  if(d.type==='response'){
+    const payload=lastPendingRequest?{content:lastPendingRequest.content,media:[...(lastPendingRequest.media||[])]}:null;
+    const targetEl=streamBotResponse(d.content||'(空回复)');
+    if(payload && isFailureText(d.content||'')){
+      const timer=setInterval(()=>{
+        if(!activeStream){
+          attachRetryAction(targetEl, payload);
+          clearInterval(timer);
+        }
+      },30);
+    }else{
+      lastPendingRequest=null;
+    }
+  }
 }
 async function sendMsg(){
   const t=document.getElementById('input'),v=t.value.trim();
@@ -675,6 +735,7 @@ async function sendMsg(){
     return;
   }
   renderUserMessage(v, pendingImages);
+  lastPendingRequest={content:v,media:[...media]};
   ws.send(JSON.stringify({type:'message',content:v,media}));
   t.value='';
   autoH(t);
@@ -867,7 +928,9 @@ async function loadSettings(){
   }catch(e){}
 }
 async function saveSettings(){
-  const pl={agents:{defaults:{model:document.getElementById('cfgModel').value,provider:document.getElementById('cfgProvider').value,temperature:parseFloat(document.getElementById('cfgTemp').value),maxTokens:parseInt(document.getElementById('cfgMaxTok').value),contextWindowTokens:parseInt(document.getElementById('cfgCtx').value)}},providers:{},tools:{web:{proxy:document.getElementById('cfgProxy').value||null,search:{apiKey:document.getElementById('cfgBrave').value}},exec:{timeout:parseInt(document.getElementById('cfgTimeout').value)},restrictToWorkspace:document.getElementById('cfgRestrict').value==='true'}};
+  const braveKey=document.getElementById('cfgBrave').value;
+  const pl={agents:{defaults:{model:document.getElementById('cfgModel').value,provider:document.getElementById('cfgProvider').value,temperature:parseFloat(document.getElementById('cfgTemp').value),maxTokens:parseInt(document.getElementById('cfgMaxTok').value),contextWindowTokens:parseInt(document.getElementById('cfgCtx').value)}},providers:{},tools:{web:{proxy:document.getElementById('cfgProxy').value||null,search:{}},exec:{timeout:parseInt(document.getElementById('cfgTimeout').value)},restrictToWorkspace:document.getElementById('cfgRestrict').value==='true'}};
+  if(braveKey && !braveKey.includes('***'))pl.tools.web.search.apiKey=braveKey;
   for(const p of PROVS){const v=document.getElementById('key_'+p.id).value;if(v&&!v.includes('***'))pl.providers[p.id]={apiKey:v}}
   const ck=document.getElementById('keyCustom').value,cb=document.getElementById('baseCustom').value;
   if((ck&&!ck.includes('***'))||cb){if(!pl.providers.custom)pl.providers.custom={};if(ck&&!ck.includes('***'))pl.providers.custom.apiKey=ck;if(cb)pl.providers.custom.apiBase=cb}
