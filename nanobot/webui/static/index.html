@@ -105,6 +105,8 @@ tr:hover td{background:var(--accent-dim)}
 .doc-meta{font-size:12px;color:var(--text-dim);padding-bottom:8px}
 .inline-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .hint-box{font-size:12px;color:var(--text-muted);background:var(--accent-dim);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;line-height:1.6}
+.preset-toolbar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.preset-toolbar .field{margin-bottom:0}
 .btn{background:linear-gradient(135deg,#3C87FB,#2b6edb);color:#fff;border:none;padding:9px 24px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 2px 8px var(--accent-glow);transition:all .15s}
 .btn:hover{background:linear-gradient(135deg,#5a9bff,#3C87FB);box-shadow:0 4px 14px var(--accent-glow);transform:translateY(-1px)}
 .btn:active{transform:translateY(0)}
@@ -131,11 +133,13 @@ tr:hover td{background:var(--accent-dim)}
 .msg-retry{margin-top:12px}
 .msg-retry button{border:1px solid var(--border);background:none;color:var(--text);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700}
 .msg-retry button:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
-.msg.tool-result{align-self:flex-start;max-width:78%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--accent-dim);font-size:12px}
-.msg.tool-result details{cursor:pointer}
-.msg.tool-result summary{list-style:none;color:var(--text);font-weight:700}
-.msg.tool-result summary::-webkit-details-marker{display:none}
-.msg.tool-result pre{margin-top:10px;background:var(--shell-bg);border:1px solid var(--border);border-radius:8px;padding:10px;white-space:pre-wrap;overflow-x:auto;color:var(--text-muted)}
+.msg.tool-call{align-self:flex-start;max-width:78%;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--accent-dim);font-size:12px}
+.msg.tool-call-hint{color:var(--text-dim);font-family:"SF Mono",Monaco,"Cascadia Code",Consolas,monospace}
+.tool-result-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.msg.tool-call details{margin-top:8px}
+.msg.tool-call summary{list-style:none;color:var(--text);font-weight:700;cursor:pointer}
+.msg.tool-call summary::-webkit-details-marker{display:none}
+.msg.tool-call pre{margin-top:10px;background:var(--shell-bg);border:1px solid var(--border);border-radius:8px;padding:10px;white-space:pre-wrap;overflow-x:auto;color:var(--text-muted)}
 .code-wrap{position:relative}
 .copy-code-btn{position:absolute;top:10px;right:10px;border:1px solid var(--border);background:rgba(19,21,29,.88);color:#fff;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;z-index:2}
 .copy-code-btn:hover{border-color:var(--accent);color:var(--accent)}
@@ -333,6 +337,25 @@ tr:hover td{background:var(--accent-dim)}
         <span class="save-msg" id="saveMsg"></span>
       </div>
       <div class="card">
+        <h3>模型预设</h3>
+        <div class="preset-toolbar">
+          <div class="field" style="min-width:220px">
+            <label>已保存模型</label>
+            <select id="presetSelect" onchange="selectModelPreset(this.value)"></select>
+          </div>
+          <div class="field" style="min-width:220px">
+            <label>预设名称</label>
+            <input id="presetName" placeholder="例如：主力模型 / 新闻搜索 / 图像识别">
+          </div>
+          <div class="inline-actions">
+            <button class="btn btn-sm" onclick="saveCurrentAsPreset()">保存为预设</button>
+            <button class="btn btn-sm btn-outline" onclick="activateSelectedPreset()">切换到此预设</button>
+            <button class="btn btn-sm btn-outline" onclick="deleteSelectedPreset()">删除</button>
+            <span class="save-msg" id="presetMsg"></span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
         <h3>模型配置</h3>
         <div class="field-row">
           <div class="field"><label>模型名称</label><input id="cfgModel" placeholder="anthropic/claude-opus-4-5"></div>
@@ -395,17 +418,18 @@ const PROVS=[
   {id:'siliconflow',label:'硅基流动',ph:''},{id:'volcengine',label:'火山引擎',ph:''},
   {id:'groq',label:'Groq',ph:'gsk_...'},
 ];
-let docsCatalog=[],currentDocId='memory';
+let docsCatalog=[],currentDocId='memory',modelPresets=[],currentPresetId='';
 (function(){const c=document.getElementById('keyFields');for(let i=0;i<PROVS.length;i+=2){const r=document.createElement('div');r.className='field-row';for(let j=i;j<Math.min(i+2,PROVS.length);j++){const p=PROVS[j];r.innerHTML+=`<div class="field"><div class="field-head"><label>${p.label}</label><button class="btn btn-sm btn-outline" type="button" onclick="testProvider('${p.id}', this)">测试</button></div><input id="key_${p.id}" type="password" placeholder="${p.ph}"></div>`}c.appendChild(r)}})();
 
 // ── Navigation ──
 const panels={chat:'chatPanel',overview:'overviewPanel',sessions:'sessionsPanel',cron:'cronPanel',skills:'skillsPanel',tools:'toolsPanel',memory:'memoryPanel',settings:'settingsPanel'};
 const titles={chat:'对话',overview:'总览',sessions:'会话',cron:'定时任务',skills:'技能',tools:'工具',memory:'记忆',settings:'设置'};
-function go(id){
+function go(id, updateHash=true){
   document.querySelectorAll('.nav-btn').forEach((b,i)=>{const t=b.getAttribute('onclick');b.classList.toggle('active',t&&t.includes("'"+id+"'"))});
   Object.values(panels).forEach(p=>document.getElementById(p).classList.remove('active'));
   document.getElementById(panels[id]).classList.add('active');
   document.getElementById('pageTitle').textContent=titles[id];
+  if(updateHash)history.replaceState(null,'',`#${id}`);
   if(id==='overview')loadOverview();if(id==='sessions')loadSessions();if(id==='cron')loadCron();
   if(id==='skills')loadSkills();if(id==='tools')loadTools();if(id==='memory')loadMemory();
   if(id==='settings')loadSettings();
@@ -484,7 +508,8 @@ function setExecModeBusy(busy){
   document.querySelectorAll('.mode-pill').forEach(btn=>btn.disabled=busy);
 }
 function applyRuntimeStatus(d){
-  document.getElementById('footerModel').textContent=formatFooterModel(d.model,d.provider);
+  const label=d.active_model_preset_name?`${d.active_model_preset_name} · ${d.model||'--'} · ${d.provider||'--'}`:formatFooterModel(d.model,d.provider);
+  document.getElementById('footerModel').textContent=label;
   document.getElementById('noKeyBar').style.display=d.has_key?'none':'';
   if(d.exec_mode)renderExecMode(d.exec_mode);
 }
@@ -640,15 +665,26 @@ function retryFailedPayload(payload){
   updBtn();
   ensureProgress('正在处理中...');
 }
+function ensureToolCallBubble(){
+  const box=document.getElementById('messages');
+  const bubbles=[...box.querySelectorAll('.msg.tool-call')];
+  return bubbles[bubbles.length-1]||null;
+}
 function renderToolResultCard(raw){
   showMessages();
   let data={tool:'工具',preview:String(raw||'')};
   try{data=JSON.parse(raw)}catch(e){}
-  const box=document.getElementById('messages');
-  const e=document.createElement('div');
-  e.className='msg tool-result';
-  e.innerHTML=`<details><summary>查看 ${escapeHtml(data.tool||'工具')} 输出</summary><pre>${escapeHtml(data.preview||'')}</pre></details>`;
-  box.appendChild(e);
+  let bubble=ensureToolCallBubble();
+  if(!bubble){
+    bubble=document.createElement('div');
+    bubble.className='msg tool-call';
+    bubble.innerHTML='<div class="msg.tool-call-hint">工具执行结果</div><div class="tool-result-list"></div>';
+    document.getElementById('messages').appendChild(bubble);
+  }
+  const list=bubble.querySelector('.tool-result-list');
+  const item=document.createElement('details');
+  item.innerHTML=`<summary>查看 ${escapeHtml(data.tool||'工具')} 输出</summary><pre>${escapeHtml(data.preview||'')}</pre>`;
+  list.appendChild(item);
   scrollB();
 }
 async function setExecMode(mode){
@@ -706,7 +742,7 @@ function handle(d){
   }
   if(d.type==='exec_approval'){renderApprovalRequest(d);return}
   if(d.type==='progress'){ensureProgress(d.content||'思考中...');return}
-  if(d.type==='tool_hint'){showMessages();const e=document.createElement('div');e.className='msg tool-hint';e.textContent=d.content;box.appendChild(e);scrollB();return}
+  if(d.type==='tool_hint'){showMessages();const e=document.createElement('div');e.className='msg tool-call';e.innerHTML=`<div class="msg.tool-call-hint">${escapeHtml(d.content||'')}</div><div class="tool-result-list"></div>`;box.appendChild(e);scrollB();return}
   if(d.type==='tool_result'){renderToolResultCard(d.content);return}
   if(d.type==='error'){showMessages();clearProgress();const e=document.createElement('div');e.className='msg error';e.textContent=d.content||'发生错误';box.appendChild(e);scrollB();waiting=false;updBtn();return}
   if(d.type==='response'){
@@ -925,7 +961,85 @@ async function loadSettings(){
     document.getElementById('cfgProxy').value=t.web?.proxy||'';
     document.getElementById('cfgTimeout').value=t.exec?.timeout??60;
     document.getElementById('cfgRestrict').value=String(t.restrictToWorkspace??false);
+    await loadModelPresets(cfg);
   }catch(e){}
+}
+function fillModelForm(data){
+  document.getElementById('cfgModel').value=data.model||'';
+  document.getElementById('cfgProvider').value=data.provider||'auto';
+  document.getElementById('cfgTemp').value=data.temperature??0.1;
+  document.getElementById('cfgMaxTok').value=data.maxTokens??8192;
+  document.getElementById('cfgCtx').value=data.contextWindowTokens??65536;
+}
+async function loadModelPresets(cfg){
+  const list=await(await fetch('/api/model-presets')).json();
+  modelPresets=list;
+  const sel=document.getElementById('presetSelect');
+  const activeId=cfg?.agents?.activeModelPresetId||cfg?.agents?.active_model_preset_id||'';
+  currentPresetId=activeId||currentPresetId||'';
+  sel.innerHTML='<option value="">当前手动配置</option>'+list.map(item=>`<option value="${item.id}">${item.name}</option>`).join('');
+  if(currentPresetId && list.some(item=>item.id===currentPresetId)){
+    sel.value=currentPresetId;
+    const preset=list.find(item=>item.id===currentPresetId);
+    document.getElementById('presetName').value=preset?.name||'';
+  }else{
+    currentPresetId='';
+    sel.value='';
+    document.getElementById('presetName').value='';
+  }
+}
+function selectModelPreset(id){
+  currentPresetId=id;
+  const preset=modelPresets.find(item=>item.id===id);
+  if(!preset){
+    document.getElementById('presetName').value='';
+    return;
+  }
+  document.getElementById('presetName').value=preset.name||'';
+  fillModelForm(preset);
+}
+async function saveCurrentAsPreset(){
+  const payload={
+    id: currentPresetId || undefined,
+    name: document.getElementById('presetName').value.trim(),
+    model: document.getElementById('cfgModel').value.trim(),
+    provider: document.getElementById('cfgProvider').value,
+    temperature: parseFloat(document.getElementById('cfgTemp').value),
+    maxTokens: parseInt(document.getElementById('cfgMaxTok').value),
+    contextWindowTokens: parseInt(document.getElementById('cfgCtx').value),
+  };
+  if(!payload.name){alert('请先填写预设名称');return}
+  const res=await fetch('/api/model-presets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data=await res.json();
+  if(!res.ok){alert(data.message||'保存模型预设失败');return}
+  currentPresetId=data.id;
+  const msg=document.getElementById('presetMsg');
+  msg.textContent=data.message||'模型预设已保存';
+  setTimeout(()=>msg.textContent='',4000);
+  await loadSettings();
+}
+async function activateSelectedPreset(){
+  if(!currentPresetId){alert('请先选择一个模型预设');return}
+  const res=await fetch('/api/runtime/model-preset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({presetId:currentPresetId})});
+  const data=await res.json();
+  if(!res.ok){alert(data.message||'切换模型预设失败');return}
+  if(data.runtime)applyRuntimeStatus(data.runtime);
+  const msg=document.getElementById('presetMsg');
+  msg.textContent=data.message||'已切换';
+  setTimeout(()=>msg.textContent='',4000);
+}
+async function deleteSelectedPreset(){
+  if(!currentPresetId){return}
+  if(!confirm('确定删除当前模型预设？'))return;
+  const res=await fetch('/api/model-presets/'+encodeURIComponent(currentPresetId),{method:'DELETE'});
+  const data=await res.json();
+  if(!res.ok){alert(data.message||'删除模型预设失败');return}
+  currentPresetId='';
+  document.getElementById('presetName').value='';
+  const msg=document.getElementById('presetMsg');
+  msg.textContent=data.message||'已删除';
+  setTimeout(()=>msg.textContent='',4000);
+  await loadSettings();
 }
 async function saveSettings(){
   const braveKey=document.getElementById('cfgBrave').value;
@@ -972,7 +1086,13 @@ async function testProvider(provider, trigger){
   }
 }
 
+window.addEventListener('hashchange',()=>{
+  const target=(location.hash||'#chat').slice(1);
+  if(panels[target])go(target,false);
+});
+const initialPanel=(location.hash||'#chat').slice(1);
 connect();
+if(panels[initialPanel])go(initialPanel,false);
 </script>
 </body>
 </html>

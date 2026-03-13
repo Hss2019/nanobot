@@ -62,6 +62,12 @@ def create_app(
                 cron_info = cron_svc.status()
             except Exception:
                 pass
+        active_preset = None
+        if config.agents.active_model_preset_id:
+            active_preset = next(
+                (preset for preset in config.agents.model_presets if preset.id == config.agents.active_model_preset_id),
+                None,
+            )
         return {
             "model": config.agents.defaults.model,
             "provider": config.get_provider_name() or config.agents.defaults.provider,
@@ -72,6 +78,8 @@ def create_app(
             "workspace": str(config.workspace_path),
             "cron": cron_info,
             "exec_mode": config.tools.exec.mode,
+            "active_model_preset_id": config.agents.active_model_preset_id,
+            "active_model_preset_name": active_preset.name if active_preset else None,
         }
 
     def _workspace_docs() -> list[dict[str, Any]]:
@@ -310,6 +318,89 @@ def create_app(
             "message": "已保存，当前会话已热更新",
             "runtime": _runtime_status(),
         })
+
+    @app.get("/api/model-presets")
+    async def list_model_presets():
+        return JSONResponse([
+            {
+                "id": preset.id,
+                "name": preset.name,
+                "model": preset.model,
+                "provider": preset.provider,
+                "temperature": preset.temperature,
+                "maxTokens": preset.max_tokens,
+                "contextWindowTokens": preset.context_window_tokens,
+                "reasoningEffort": preset.reasoning_effort,
+                "active": preset.id == config.agents.active_model_preset_id,
+            }
+            for preset in config.agents.model_presets
+        ])
+
+    @app.post("/api/model-presets")
+    async def save_model_preset(payload: dict[str, Any]):
+        from nanobot.config.loader import load_config, save_config
+        from nanobot.config.schema import ModelPreset
+
+        cfg = load_config()
+        preset_id = str(payload.get("id") or uuid.uuid4().hex[:8])
+        preset_name = str(payload.get("name") or "").strip() or str(payload.get("model") or "未命名模型").strip()
+        preset = ModelPreset(
+            id=preset_id,
+            name=preset_name,
+            model=str(payload.get("model") or cfg.agents.defaults.model).strip(),
+            provider=str(payload.get("provider") or cfg.agents.defaults.provider).strip() or "auto",
+            temperature=float(payload.get("temperature") or cfg.agents.defaults.temperature),
+            max_tokens=int(payload.get("maxTokens") or cfg.agents.defaults.max_tokens),
+            context_window_tokens=int(payload.get("contextWindowTokens") or cfg.agents.defaults.context_window_tokens),
+            reasoning_effort=(str(payload.get("reasoningEffort")).strip() if payload.get("reasoningEffort") is not None else cfg.agents.defaults.reasoning_effort),
+        )
+
+        presets = [item for item in cfg.agents.model_presets if item.id != preset_id]
+        presets.append(preset)
+        cfg.agents.model_presets = presets
+        save_config(cfg)
+        _apply_updated_config(cfg)
+        return JSONResponse({"status": "ok", "message": "模型预设已保存", "id": preset_id})
+
+    @app.post("/api/runtime/model-preset")
+    async def switch_model_preset(payload: dict[str, Any]):
+        from nanobot.config.loader import load_config, save_config
+
+        preset_id = str(payload.get("presetId") or "").strip()
+        if not preset_id:
+            return JSONResponse({"status": "error", "message": "缺少预设 ID"}, status_code=400)
+
+        cfg = load_config()
+        preset = next((item for item in cfg.agents.model_presets if item.id == preset_id), None)
+        if not preset:
+            return JSONResponse({"status": "error", "message": "模型预设不存在"}, status_code=404)
+
+        cfg.agents.defaults.model = preset.model
+        cfg.agents.defaults.provider = preset.provider
+        cfg.agents.defaults.temperature = preset.temperature
+        cfg.agents.defaults.max_tokens = preset.max_tokens
+        cfg.agents.defaults.context_window_tokens = preset.context_window_tokens
+        cfg.agents.defaults.reasoning_effort = preset.reasoning_effort
+        cfg.agents.active_model_preset_id = preset.id
+
+        save_config(cfg)
+        _apply_updated_config(cfg)
+        return JSONResponse({"status": "ok", "message": f"已切换到模型预设：{preset.name}", "runtime": _runtime_status()})
+
+    @app.delete("/api/model-presets/{preset_id}")
+    async def delete_model_preset(preset_id: str):
+        from nanobot.config.loader import load_config, save_config
+
+        cfg = load_config()
+        before = len(cfg.agents.model_presets)
+        cfg.agents.model_presets = [item for item in cfg.agents.model_presets if item.id != preset_id]
+        if len(cfg.agents.model_presets) == before:
+            return JSONResponse({"status": "error", "message": "模型预设不存在"}, status_code=404)
+        if cfg.agents.active_model_preset_id == preset_id:
+            cfg.agents.active_model_preset_id = None
+        save_config(cfg)
+        _apply_updated_config(cfg)
+        return JSONResponse({"status": "ok", "message": "模型预设已删除"})
 
     @app.post("/api/config/test-provider")
     async def test_provider_api(payload: dict[str, Any]):

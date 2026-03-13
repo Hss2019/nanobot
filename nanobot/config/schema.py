@@ -260,11 +260,26 @@ class AgentDefaults(Base):
         return self.memory_window is not None and "context_window_tokens" not in self.model_fields_set
 
 
+class ModelPreset(Base):
+    """Named model preset for quick switching."""
+
+    id: str = ""
+    name: str = ""
+    model: str = "anthropic/claude-opus-4-5"
+    provider: str = "auto"
+    temperature: float = 0.1
+    max_tokens: int = 8192
+    context_window_tokens: int = 65_536
+    reasoning_effort: str | None = None
+
+
 class AgentsConfig(Base):
     """Agent configuration."""
 
     defaults: AgentDefaults = Field(default_factory=AgentDefaults)
     disabled_skills: list[str] = Field(default_factory=list)
+    model_presets: list[ModelPreset] = Field(default_factory=list)
+    active_model_preset_id: str | None = None
 
 
 class ProviderConfig(Base):

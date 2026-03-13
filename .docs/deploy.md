@@ -9,8 +9,8 @@
 
 ### 克隆仓库
 ```bash
-git clone https://github.com/Hss2019/nanobot.git
-cd nanobot
+git clone <仓库地址> <本地目录名>
+cd <本地目录名>
 ```
 
 ## 2. 安装依赖

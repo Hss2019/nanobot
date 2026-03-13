@@ -117,6 +117,7 @@ def start_desktop(
         # --- 3. Try system tray ---
         try:
             import pystray
+            import webbrowser
             from PIL import Image, ImageDraw
 
             def _create_icon() -> Image.Image:
@@ -135,8 +136,28 @@ def start_desktop(
                     _window.show()
                     _window.restore()
 
+            def _open_page(page: str | None = None) -> None:
+                target = f"{url}#{page}" if page else url
+                if _window:
+                    try:
+                        if hasattr(_window, "load_url"):
+                            _window.load_url(target)
+                        _window.show()
+                        _window.restore()
+                        return
+                    except Exception:
+                        pass
+                webbrowser.open(target)
+
+            def _hide():
+                if _window:
+                    _window.hide()
+
             menu = pystray.Menu(
                 pystray.MenuItem("打开 CMClaw", lambda: _show(), default=True),
+                pystray.MenuItem("打开设置", lambda: _open_page("settings")),
+                pystray.MenuItem("浏览器打开", lambda: _open_page()),
+                pystray.MenuItem("隐藏窗口", lambda: _hide()),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("退出", lambda: _shutdown()),
             )
