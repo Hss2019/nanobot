@@ -23,6 +23,7 @@ if sys.platform == "win32":
         except Exception:
             pass
 
+import click
 import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
@@ -297,7 +298,7 @@ def _make_provider_safe(config: Config):
     """
     try:
         return _make_provider(config)
-    except SystemExit:
+    except (SystemExit, click.exceptions.Exit):
         from nanobot.providers.base import GenerationSettings
         from nanobot.providers.litellm_provider import LiteLLMProvider
 
@@ -363,7 +364,7 @@ def _build_cron_job_handler(agent, bus):
 
 def _load_runtime_config(config: str | None = None, workspace: str | None = None) -> Config:
     """Load config and optionally override the active workspace."""
-    from nanobot.config.loader import load_config, set_config_path
+    from nanobot.config.loader import get_config_path, load_config, save_config, set_config_path
 
     config_path = None
     if config:
@@ -373,6 +374,10 @@ def _load_runtime_config(config: str | None = None, workspace: str | None = None
             raise typer.Exit(1)
         set_config_path(config_path)
         console.print(f"[dim]Using config: {config_path}[/dim]")
+
+    active_config_path = config_path or get_config_path()
+    if not active_config_path.exists():
+        save_config(Config(), active_config_path)
 
     loaded = load_config(config_path)
     if workspace:
