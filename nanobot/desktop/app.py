@@ -151,6 +151,7 @@ def start_desktop(
             title, url,
             width=1100, height=750,
             min_size=(600, 450),
+            text_select=True,
         )
 
         def _on_closing():
